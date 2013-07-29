@@ -258,7 +258,13 @@ int main (void)
 }
 
 /**
- * Read out current temperature in celcius by blinking the LED.
+ * Read out current temperature in °C by blinking the LED. LED blinked in two
+ * sequences: first sequence for the temperature (°C) tens digit followed by
+ * a delay of 2s. Then the second sequence for the least significant digit (the units).
+ * Zero is represented by a one short blink of 100ms where as all other digits use 500ms
+ * blinks. Temperatures of < 10°C or > 99°C not supported.
+ * Example: 42°C: 4 x normal blinks, delay of 2s, 2 normal blinks.
+ * Example: 60°C: 6 x normal blinks, delay of 2s, 1 short blink.
  */
 void readOutTemperature (void) {
 	int32_t currentTemperatureDeg = readTemperature()/10;
