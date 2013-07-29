@@ -38,7 +38,9 @@ int parse_dec(uint8_t *buf, uint8_t **end);
 void print_dec(uint8_t *buf, uint32_t v);
 void execute_cmd(uint8_t *buf);
 void delay(uint32_t d);
+void delayMilliseconds (uint32_t d);
 void blink(uint32_t n, uint32_t on_t, uint32_t off_t);
+int32_t readTemperature (void);
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -130,7 +132,6 @@ void configurePins()
 ******************************************************************************/
 int main (void)
 {
-	int i;
 	uint8_t buf[16];
 
 	SystemCoreClockUpdate();
@@ -187,13 +188,13 @@ int main (void)
 	int nButtonPress = 0;
 	while ( (nButtonPress==0) || ((timeTick - swDownTime) < 500) ) {
 
-		// Wait for interrupt. Two possible sources:
+		// Wait for interrupt. Two probable sources:
 		// SysTick every 10ms and pin interrupt from SW1
 		__WFI();
 
 		// Was interrupt due to SW1?
 		if (interruptFlags & 0x01) {
-			blink(1,100000,100000);
+			blink(1,250,0);
 			nButtonPress++;
 			interruptFlags = 0;
 		}
@@ -201,13 +202,35 @@ int main (void)
 	}
 
 	// Echo back the number of button press to the user
-	blink (nButtonPress,100000,200000);
+	blink (nButtonPress,500,500);
 
+	// Delay for 5s before entering control mode to avoid confusion
+	// with flashing LEDs.
+	delayMilliseconds (5000);
 
 	/*
-	 * Enter control mode.
+	 * Enter control mode. If under temperature LED will blick slowly. If at set-point
+	 * +/- 1°C LED will be solid on. If over temperature LED will blink fast. This
+	 * mode can only be exited by reset/power cycle.
 	 */
+	int32_t setPointTemperature = 540 + 10*nButtonPress;
+	int32_t currentTemperature;
 	while (1) {
+
+		// Read temperature in 0.1°C units. Eg 452 = 45.2°C.
+		currentTemperature = readTemperature();
+
+		if (currentTemperature < (setPointTemperature-10) ) {
+			blink (1, 2000, 2000);
+		}
+
+		if (currentTemperature > (setPointTemperature+10) ) {
+			blink (1, 500, 500);
+		}
+
+	}
+
+		/*
 			  GPIOSetBitValue(ULED1_PORT,ULED1_PIN,
 					  GPIOGetPinValue(SW1_PORT,SW1_PIN)
 			  );
@@ -218,14 +241,7 @@ int main (void)
 				  MyUARTBufReset();
 				  execute_cmd(buf);
 			  }
-
-
-
-		  }
-
-		  // Step 6. Use the ARM WFI (Wait For Interrupt) instruction.
-		  //__WFI();
-
+		*/
 
 
 
@@ -306,13 +322,33 @@ void delay (uint32_t d) {
 	}
 }
 
+/**
+ * Delay for t_ms milliseconds. Uses the SysTick timer which has a resolution of
+ * 10ms, so < 10ms will result in no delay.
+ */
+void delayMilliseconds(uint32_t t_ms) {
+	uint32_t t_cs = t_ms/10;
+	if (t_cs==0) {
+		return;
+	}
+	uint32_t end = timeTick + t_cs;
+	while (timeTick != end) ;
+}
+
+/**
+ * Blink LED 'n' times. Specify on and off time in milliseconds with on_t, off_t.
+ */
 void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
 	while (n--) {
 		GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 0);
-		delay (on_t);
+		delayMilliseconds (on_t);
 		GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 1);
-		delay (off_t);
+		delayMilliseconds (off_t);
 	}
+}
+
+int32_t readTemperature () {
+	return 100; // dummy value
 }
 
 /* SysTick interrupt happens every 10 ms */
