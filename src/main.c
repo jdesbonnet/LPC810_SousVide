@@ -35,9 +35,13 @@ __CR_MTB_BUFFER(32);
 
 int isDigit(uint8_t v);
 int parse_dec(uint8_t *buf, uint8_t **end);
+void print_dec(uint8_t *buf, uint32_t v);
 void execute_cmd(uint8_t *buf);
 void delay(uint32_t d);
 void blink(void);
+
+#define SYSTICK_DELAY		(SystemCoreClock/100)
+
 
 /* This define should be enabled if you want to      */
 /* maintain an SWD/debug connection to the LPC810,   */
@@ -45,6 +49,11 @@ void blink(void);
 /* LED on the LPC810 Mini Board, which is on the     */
 /* SWDIO pin (PIO0_2).                               */
 //#define USE_SWD
+
+
+// Interrupt channel to use with pin interrupt
+#define CHANNEL (1)
+
 
 #define HEATING_ELEMENT_EN
 #define HEATING_ELEMENT_PORT (0)
@@ -57,6 +66,11 @@ void blink(void);
 #define SW1_EN
 #define SW1_PORT (0)
 #define SW1_PIN (1)
+
+volatile uint32_t timeTick = 0;
+volatile uint32_t interruptFlags = 0;
+
+
 
 void configurePins()
 {
@@ -116,43 +130,74 @@ void configurePins()
 ******************************************************************************/
 int main (void)
 {
-
-	while (1) {
-
-		  SystemCoreClockUpdate();
-
-		  GPIOInit();
-		  configurePins();
-
-		  //UARTInit(LPC_USART0, 115200);
-		  MyUARTInit(LPC_USART0, 115200);
-
-
-		  LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
-
-		  MyUARTSendStringZ (LPC_USART0, (uint8_t*)"Welcome3!\r\n");
+	uint8_t buf[16];
 
 
 
-		    GPIOSetPinInterrupt( 1 , /* channel */
+	SystemCoreClockUpdate();
+
+
+	SysTick_Config( SYSTICK_DELAY );
+
+
+
+	//
+	// Enable and configure GPIO
+	//
+
+	GPIOInit();
+
+#if 0
+	/* Enable AHB clock to the GPIO domain. */
+	LPC_SYSCON->SYSAHBCLKCTRL |= (1<<6);
+
+	/* Peripheral reset control to GPIO and GPIO INT, a "1" bring it out of reset. */
+	LPC_SYSCON->PRESETCTRL &= ~(0x1<<10);
+	LPC_SYSCON->PRESETCTRL |= (0x1<<10);
+#endif
+
+
+
+	configurePins();
+
+	//UARTInit(LPC_USART0, 115200);
+	MyUARTInit(LPC_USART0, 115200);
+
+
+	LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
+
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"Welcome!\r\n");
+
+
+
+	GPIOSetPinInterrupt( CHANNEL , /* channel */
 		    				SW1_PORT,
 		    				SW1_PIN,
 		    				0, /* sense 0=edge*/
 		    				0 /* polarity, 0=active low */
 		    				);
-		    GPIOPinIntEnable( 1 /* channel */,
+	GPIOPinIntEnable( CHANNEL /* channel */,
 		    		0 /* falling edge */ );
 
 
+	while (1) {
+		__WFI();
 
-		    while (1) {
-		    	__WFI();
-		    	blink();
-		    	blink();
-		    	blink();
-		    }
+		if (interruptFlags & 0x01) {
+			//GPIOPinIntClear(CHANNEL);
+			blink();
 
-		  uint8_t buf[16];
+			print_dec(buf, timeTick);
+			MyUARTSendStringZ(LPC_USART0, buf);
+			MyUARTSendStringZ(LPC_USART0, (uint8_t *) "\r\n");
+
+			blink();
+
+			interruptFlags = 0;
+		}
+
+	}
+
 
 		  while (1) {
 			  GPIOSetBitValue(ULED1_PORT,ULED1_PIN,
@@ -175,7 +220,7 @@ int main (void)
 
 
 
-	}
+
 
 }
 
@@ -201,6 +246,33 @@ int parse_dec(uint8_t *buf, uint8_t **end) {
 	}
 	*end = buf;
 	return v;
+}
+
+void print_dec(uint8_t *buf, uint32_t v) {
+	if (v==0) {
+		*buf='0';
+		*(buf+1)=0;
+		return;
+	}
+	uint8_t *s = buf;
+	while (v>0) {
+		*s++ = '0' + (v%10);
+		v /= 10;
+	}
+	*s=0;
+
+	// reverse
+	int len = s - buf;
+	int i;
+	uint8_t t;
+	for (i = 0; i < len/2; i++) {
+		s--;
+		t = *s;
+		*s = *buf;
+		*buf = t;
+		*buf++;
+	}
+
 }
 
 /**
@@ -232,3 +304,23 @@ void blink () {
 	  GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 1);
 	  delay (100000);
 }
+
+/* SysTick interrupt happens every 10 ms */
+void SysTick_Handler(void)
+{
+  timeTick++;
+  //LPC_USART0->TXDATA = "*";
+}
+
+void PININT1_IRQHandler(void)
+{
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"^");
+
+	interruptFlags |= 0x01;
+
+	// Clear the interrupt
+	LPC_PIN_INT->IST = (1<<CHANNEL);
+	return;
+}
+
+
