@@ -228,6 +228,15 @@ int main (void)
 			blink (1, 500, 500);
 		}
 
+		// Did we receive a button press?
+		if (interruptFlags & 0x01) {
+			// Read out temperature
+			delayMilliseconds(5000);
+			readOutTemperature();
+			delayMilliseconds(5000);
+			interruptFlags = 0;
+		}
+
 	}
 
 		/*
@@ -246,6 +255,26 @@ int main (void)
 
 
 
+}
+
+/**
+ * Read out current temperature in celcius by blinking the LED.
+ */
+void readOutTemperature (void) {
+	int32_t currentTemperatureDeg = readTemperature()/10;
+
+	// Tens
+	blink(currentTemperatureDeg/10,500,500);
+
+	delayMilliseconds(2000);
+
+	// Units
+	uint32_t d = currentTemperatureDeg%10;
+	if (d==0) {
+		blink(1, 100, 500);
+	} else {
+		blink (d,500,500);
+	}
 }
 
 void execute_cmd (uint8_t *cmd) {
@@ -348,7 +377,7 @@ void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
 }
 
 int32_t readTemperature () {
-	return 100; // dummy value
+	return 427; // dummy value
 }
 
 /* SysTick interrupt happens every 10 ms */
