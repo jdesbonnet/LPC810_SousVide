@@ -37,6 +37,7 @@ int isDigit(uint8_t v);
 int parse_dec(uint8_t *buf, uint8_t **end);
 void execute_cmd(uint8_t *buf);
 void delay(uint32_t d);
+void blink(void);
 
 /* This define should be enabled if you want to      */
 /* maintain an SWD/debug connection to the LPC810,   */
@@ -106,6 +107,8 @@ void configurePins()
 #endif
 
 
+
+
 }
 
 /*****************************************************************************
@@ -129,6 +132,25 @@ int main (void)
 
 		  MyUARTSendStringZ (LPC_USART0, (uint8_t*)"Welcome3!\r\n");
 
+
+
+		    GPIOSetPinInterrupt( 1 , /* channel */
+		    				SW1_PORT,
+		    				SW1_PIN,
+		    				0, /* sense 0=edge*/
+		    				0 /* polarity, 0=active low */
+		    				);
+		    GPIOPinIntEnable( 1 /* channel */,
+		    		0 /* falling edge */ );
+
+
+
+		    while (1) {
+		    	__WFI();
+		    	blink();
+		    	blink();
+		    	blink();
+		    }
 
 		  uint8_t buf[16];
 
@@ -202,4 +224,11 @@ void delay (uint32_t d) {
 	while (--d != 0) {
 			__NOP();
 	}
+}
+
+void blink () {
+	  GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 0);
+	  delay (100000);
+	  GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 1);
+	  delay (100000);
 }
