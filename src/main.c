@@ -38,7 +38,7 @@ int parse_dec(uint8_t *buf, uint8_t **end);
 void print_dec(uint8_t *buf, uint32_t v);
 void execute_cmd(uint8_t *buf);
 void delay(uint32_t d);
-void blink(void);
+void blink(uint32_t n, uint32_t on_t, uint32_t off_t);
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -69,7 +69,7 @@ void blink(void);
 
 volatile uint32_t timeTick = 0;
 volatile uint32_t interruptFlags = 0;
-
+volatile uint32_t swDownTime=0;
 
 
 void configurePins()
@@ -130,12 +130,10 @@ void configurePins()
 ******************************************************************************/
 int main (void)
 {
+	int i;
 	uint8_t buf[16];
 
-
-
 	SystemCoreClockUpdate();
-
 
 	SysTick_Config( SYSTICK_DELAY );
 
@@ -180,26 +178,36 @@ int main (void)
 		    		0 /* falling edge */ );
 
 
-	while (1) {
+	/*
+	 * Get temperature set-point. This is set by pressing SW1 once for each degree C
+	 * above 54°C. Ie one press (the minimum) is 55°C. A pause of more than 5 seconds
+	 * signals that that user has finished setting the temperature. To confirm selection
+	 * the LED will blink for each button press before entering control mode.
+	 */
+	int nButtonPress = 0;
+	while ( (nButtonPress==0) || ((timeTick - swDownTime) < 500) ) {
+
+		// Wait for interrupt. Two possible sources:
+		// SysTick every 10ms and pin interrupt from SW1
 		__WFI();
 
+		// Was interrupt due to SW1?
 		if (interruptFlags & 0x01) {
-			//GPIOPinIntClear(CHANNEL);
-			blink();
-
-			print_dec(buf, timeTick);
-			MyUARTSendStringZ(LPC_USART0, buf);
-			MyUARTSendStringZ(LPC_USART0, (uint8_t *) "\r\n");
-
-			blink();
-
+			blink(1,100000,100000);
+			nButtonPress++;
 			interruptFlags = 0;
 		}
 
 	}
 
+	// Echo back the number of button press to the user
+	blink (nButtonPress,100000,200000);
 
-		  while (1) {
+
+	/*
+	 * Enter control mode.
+	 */
+	while (1) {
 			  GPIOSetBitValue(ULED1_PORT,ULED1_PIN,
 					  GPIOGetPinValue(SW1_PORT,SW1_PIN)
 			  );
@@ -298,25 +306,32 @@ void delay (uint32_t d) {
 	}
 }
 
-void blink () {
-	  GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 0);
-	  delay (100000);
-	  GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 1);
-	  delay (100000);
+void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
+	while (n--) {
+		GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 0);
+		delay (on_t);
+		GPIOSetBitValue(ULED1_PORT,ULED1_PIN, 1);
+		delay (off_t);
+	}
 }
 
 /* SysTick interrupt happens every 10 ms */
 void SysTick_Handler(void)
 {
   timeTick++;
-  //LPC_USART0->TXDATA = "*";
 }
 
 void PININT1_IRQHandler(void)
 {
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"^");
 
-	interruptFlags |= 0x01;
+	// Eliminate switch bounce
+	if ( (timeTick-swDownTime) > 20) {
+		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"^");
+		interruptFlags |= 0x01;
+		swDownTime = timeTick;
+	} else {
+		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"x");
+	}
 
 	// Clear the interrupt
 	LPC_PIN_INT->IST = (1<<CHANNEL);
