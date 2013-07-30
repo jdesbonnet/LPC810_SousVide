@@ -112,3 +112,11 @@ void ow_byte_write (int data) {
 
 }
 
+int ow_byte_read () {
+	int i, data = 0;
+	for (i = 0; i < 8; i++) {
+		data >>= 1;
+		data |= ow_bit_read() ? 0x80 : 0x00;
+	}
+	return data;
+}

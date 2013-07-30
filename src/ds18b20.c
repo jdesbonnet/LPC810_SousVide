@@ -25,10 +25,16 @@ uint64_t ds18b20_rom_read () {
 	uint64_t addr = 0;
 
 	int i;
+	/*
 	for (i = 0; i < 64; i++) {
 		addr <<= 1;
 		addr |= ow_bit_read();
 		//delayMicroseconds(100);
+	}
+	*/
+	for (i = 0; i < 8; i++) {
+		addr <<= 8;
+		addr |= ow_byte_read();
 	}
 
 	return addr;

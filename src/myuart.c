@@ -172,6 +172,12 @@ void MyUARTBufReset() {
 void MyUARTPrintDecimal (LPC_USART_TypeDef *UARTx, int32_t i) {
 	uint8_t buf[16];
 	uint32_t j=0;
+
+	if (i==0) {
+		MyUARTSendByte(UARTx,'0');
+		return;
+	}
+
 	if (i<0) {
 		MyUARTSendByte(UARTx,'-');
 		i *= -1;
@@ -186,7 +192,17 @@ void MyUARTPrintDecimal (LPC_USART_TypeDef *UARTx, int32_t i) {
 }
 
 
-
+void MyUARTPrintHex (LPC_USART_TypeDef *UARTx, uint32_t v) {
+	int i,h;
+	for (i = 28; i >=0 ; i-=4) {
+		h = (v>>i) & 0x0f;
+		if (h<10) {
+			MyUARTSendByte(UARTx,'0'+h);
+		} else{
+			MyUARTSendByte(UARTx,'A'+h-10);
+		}
+	}
+}
 
 int parse_dec(uint8_t *buf, uint8_t **end) {
 	int v=0;

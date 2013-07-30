@@ -9,4 +9,5 @@ int ow_read(void);
 int ow_bit_read(void);
 void ow_bit_write(int b);
 void ow_byte_write (int data);
+int ow_byte_read(void);
 #endif
