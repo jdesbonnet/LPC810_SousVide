@@ -178,13 +178,23 @@ int main (void)
 	GPIOPinIntEnable( CHANNEL /* channel */,
 		    		0 /* falling edge */ );
 
+	// Configure one wire pin pull-up resistor
+	// UM10601 §6.5.6, Table 55, p64
+	// set MODE=0x02 (pull-up resistor enabled)
+	LPC_IOCON->PIO0_3 = 0x02 << 3;
+	//GPIOSetDir(0,3,0);
+	//GPIOSetBitValue(0,2,0); // LED on
+	//delayMilliseconds(10000);
+
+	// Initialy delay library (to calibrate short delay loop)
+	delay_init();
 
 	// Test OW
 	GPIOSetDir(0,3,1);
 	int i;
 	for (i = 0; i < 1000; i++) {
 		GPIOSetBitValue(0,3,1);
-		delayMilliseconds(10);
+		delayMicroseconds(100);
 		GPIOSetBitValue(0,3,0);
 		delayMilliseconds(10);
 		blink(1,10,10);
