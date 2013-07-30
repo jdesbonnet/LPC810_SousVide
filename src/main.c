@@ -63,7 +63,7 @@ void heatingElementOff(void);
 
 #define HEATING_ELEMENT_EN
 #define HEATING_ELEMENT_PORT (0)
-#define HEATING_ELEMENT_PIN (1)
+#define HEATING_ELEMENT_PIN (5)
 
 #define ULED1_EN
 #define ULED1_PORT (0)
@@ -174,8 +174,7 @@ int main (void)
 #ifdef USE_UART
 	MyUARTInit(LPC_USART0, 115200);
 	LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"Hello\r\n");
-	MyUARTPrintDecimal(LPC_USART0, -999);
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"LPC810_SousVide_0.1.1\r\n");
 #endif
 
 
@@ -259,12 +258,21 @@ int main (void)
 	 * mode can only be exited by reset/power cycle. At any time the user can press
 	 * the UI button and the temperature will be readout by blinking the LED.
 	 */
-	int32_t setPointTemperature = /* 540 */ 200 + 10*nButtonPress;
+	int32_t setPointTemperature = /* 540 */ 200 + 10*nButtonPress; // 20°C for testing
 	int32_t currentTemperature;
 	while (1) {
 
 		// Read temperature in 0.1°C units. Eg 452 = 45.2°C.
 		currentTemperature = readTemperature();
+
+		// Log temperature to serial port
+		MyUARTPrintDecimal(LPC_USART0, timeTick );
+		MyUARTSendByte (LPC_USART0, ',');
+		MyUARTPrintDecimal(LPC_USART0, currentTemperature );
+		MyUARTSendByte (LPC_USART0, ',');
+		MyUARTPrintDecimal(LPC_USART0, setPointTemperature );
+		MyUARTSendByte (LPC_USART0, '\r');
+		MyUARTSendByte (LPC_USART0, '\n');
 
 		// Slow blink if under temperature
 		if (currentTemperature < (setPointTemperature-10) ) {
