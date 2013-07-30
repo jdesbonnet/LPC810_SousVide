@@ -38,25 +38,35 @@ int ow_read() {
 }
 
 /**
- * Issue a read slot and return the result.
+ * Issue a read slot and return the result. The result must be read within
+ * 15µs of the
  *
  * @return 0 or 1
  */
 int ow_bit_read () {
-	GPIOSetBitValue(0,2, 0);
-	delayMicroseconds(20);
+	GPIOSetBitValue(0,2, 0);//debug
+
+	// The read slow starts with the bus is diven low.
+	// We have 15µs from the falling edge read the bus.
 	ow_low();
-	delay(1);
+	delay(1); // Must be held low for at least 1µs
+
+	// Bring bus high again. And read within the 15µs time interval
+	// (already a few µs used by by now...)
 	ow_high();
-
 	delay(1);
 
-	GPIOSetBitValue(0,2, 1);
+	GPIOSetBitValue(0,2, 1); //debug
 	int b = ow_read();
-	GPIOSetBitValue(0,2, 0);
+	GPIOSetBitValue(0,2, 0); //debug
 
+	// Read slots must be a minimum of 60µs in duration with a minimum of 1µs
+	// recovery time between slots. Rather than monitor bus to check for end
+	// of slot, just delay for a period well exceeding the 60µs slot time.
 	delayMicroseconds(65);
-	GPIOSetBitValue(0,2, 1);
+
+	GPIOSetBitValue(0,2, 1); //debug
+
 	return b;
 }
 
@@ -101,15 +111,6 @@ void ow_byte_write (int data) {
 		data >>= 1;
 	}
 
-
-	// Send MSB first.
-	/*
-	for (i = 0; i < 8; i++) {
-		ow_bit_write(data & 0x80);
-		data <<= 1;
-	}
-	*/
-
 }
 
 int ow_byte_read () {
@@ -120,3 +121,16 @@ int ow_byte_read () {
 	}
 	return data;
 }
+
+uint64_t ow_uint64_read () {
+	uint64_t data = 0;
+
+	int i;
+	for (i = 0; i < 8; i++) {
+		data <<= 8;
+		data |= ow_byte_read();
+	}
+
+	return data;
+}
+

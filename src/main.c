@@ -222,9 +222,10 @@ int main (void)
 		rom_addr = ds18b20_rom_read();
 		MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
 		MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
+		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
 
-		//MyUARTPrintDecimal(LPC_USART0, ds18b20_temperature_read() );
 
+		MyUARTPrintDecimal(LPC_USART0, ds18b20_temperature_read() );
 		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
 		blink (1,500,500);
 	}

@@ -10,4 +10,6 @@ int ow_bit_read(void);
 void ow_bit_write(int b);
 void ow_byte_write (int data);
 int ow_byte_read(void);
+uint64_t ow_uint64_read (void);
+
 #endif
