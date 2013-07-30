@@ -41,4 +41,10 @@ uint32_t MyUARTBufCopy(uint8_t *buf);
 
 void MyUARTPrintDecimal(LPC_USART_TypeDef *UARTx, int32_t i);
 
+
+int isDigit(uint8_t v);
+int parse_dec(uint8_t *buf, uint8_t **end);
+void print_dec(uint8_t *buf, uint32_t v);
+void execute_cmd(uint8_t *buf);
+
 #endif /* MYUART_H_ */

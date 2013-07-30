@@ -184,3 +184,72 @@ void MyUARTPrintDecimal (LPC_USART_TypeDef *UARTx, int32_t i) {
 		MyUARTSendByte(UARTx,buf[--j]);
 	}
 }
+
+
+
+
+int parse_dec(uint8_t *buf, uint8_t **end) {
+	int v=0;
+	while (isDigit(*buf)) {
+		v *= 10;
+		v += (*buf - '0');
+		buf++;
+	}
+	*end = buf;
+	return v;
+}
+
+void print_dec(uint8_t *buf, uint32_t v) {
+	if (v==0) {
+		*buf='0';
+		*(buf+1)=0;
+		return;
+	}
+	uint8_t *s = buf;
+	while (v>0) {
+		*s++ = '0' + (v%10);
+		v /= 10;
+	}
+	*s=0;
+
+	// reverse
+	int len = s - buf;
+	int i;
+	uint8_t t;
+	for (i = 0; i < len/2; i++) {
+		s--;
+		t = *s;
+		*s = *buf;
+		*buf = t;
+		*buf++;
+	}
+
+}
+
+/**
+ * Return 1 if v is a decimal digit. Else return 0.
+ */
+int isDigit (uint8_t v) {
+	return (v>='0'&&v<='9') ? 1:0;
+}
+
+/**
+ * Return zero terminated string length
+ */
+int getLength (uint8_t *s) {
+	int len=0;
+	while (*s++) len++;
+	return len;
+}
+void execute_cmd (uint8_t *cmd) {
+
+	switch (*cmd) {
+
+	case 'V': {
+		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"PiPM 0.1.3\r\n");
+	}
+	break;
+
+	} // end switch
+
+}

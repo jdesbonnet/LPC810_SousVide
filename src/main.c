@@ -28,19 +28,18 @@
 #include "lpc8xx_gpio.h"
 
 #include "myuart.h"
+#include "delay.h"
 
 // Trace buffer
 #include <cr_mtb_buffer.h>
 __CR_MTB_BUFFER(32);
 
-int isDigit(uint8_t v);
-int parse_dec(uint8_t *buf, uint8_t **end);
-void print_dec(uint8_t *buf, uint32_t v);
-void execute_cmd(uint8_t *buf);
+
 void delay(uint32_t d);
 void delayMilliseconds (uint32_t d);
 void blink(uint32_t n, uint32_t on_t, uint32_t off_t);
 int32_t readTemperature (void);
+void readOutTemperature (void);
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -52,6 +51,7 @@ int32_t readTemperature (void);
 /* SWDIO pin (PIO0_2).                               */
 //#define USE_SWD
 
+//#define USE_UART
 
 // Interrupt channel to use with pin interrupt
 #define CHANNEL (1)
@@ -132,7 +132,6 @@ void configurePins()
 ******************************************************************************/
 int main (void)
 {
-	uint8_t buf[16];
 
 	SystemCoreClockUpdate();
 
@@ -159,14 +158,15 @@ int main (void)
 
 	configurePins();
 
-	//UARTInit(LPC_USART0, 115200);
+
+	//
+	// Initialize UART and display hello message
+	//
+#ifdef USE_UART
 	MyUARTInit(LPC_USART0, 115200);
-
-
 	LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
-
 	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"Welcome!\r\n");
-
+#endif
 
 
 	GPIOSetPinInterrupt( CHANNEL , /* channel */
@@ -209,9 +209,10 @@ int main (void)
 	delayMilliseconds (5000);
 
 	/*
-	 * Enter control mode. If under temperature LED will blick slowly. If at set-point
+	 * Enter control mode. If under temperature LED will blink slowly. If at set-point
 	 * +/- 1°C LED will be solid on. If over temperature LED will blink fast. This
-	 * mode can only be exited by reset/power cycle.
+	 * mode can only be exited by reset/power cycle. At any time the user can press
+	 * the UI button and the temperature will be readout by blinking the LED.
 	 */
 	int32_t setPointTemperature = 540 + 10*nButtonPress;
 	int32_t currentTemperature;
@@ -220,13 +221,19 @@ int main (void)
 		// Read temperature in 0.1°C units. Eg 452 = 45.2°C.
 		currentTemperature = readTemperature();
 
+		// Slow blink if under temperature
 		if (currentTemperature < (setPointTemperature-10) ) {
 			blink (1, 2000, 2000);
 		}
-
-		if (currentTemperature > (setPointTemperature+10) ) {
+		// Fast blink if over temperature
+		else if (currentTemperature > (setPointTemperature+10) ) {
 			blink (1, 500, 500);
 		}
+		// Solid on if at setpoint (blink with 0 off time)
+		else {
+			blink (1, 500, 0);
+		}
+
 
 		// Did we receive a button press?
 		if (interruptFlags & 0x01) {
@@ -237,23 +244,8 @@ int main (void)
 			interruptFlags = 0;
 		}
 
+
 	}
-
-		/*
-			  GPIOSetBitValue(ULED1_PORT,ULED1_PIN,
-					  GPIOGetPinValue(SW1_PORT,SW1_PIN)
-			  );
-
-
-			  if (MyUARTGetBufFlags() & UART_BUF_FLAG_EOL) {
-				  MyUARTBufCopy(buf);
-				  MyUARTBufReset();
-				  execute_cmd(buf);
-			  }
-		*/
-
-
-
 
 }
 
@@ -283,92 +275,6 @@ void readOutTemperature (void) {
 	}
 }
 
-void execute_cmd (uint8_t *cmd) {
-
-	switch (*cmd) {
-
-	case 'V': {
-		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"PiPM 0.1.3\r\n");
-	}
-	break;
-
-	} // end switch
-
-}
-
-int parse_dec(uint8_t *buf, uint8_t **end) {
-	int v=0;
-	while (isDigit(*buf)) {
-		v *= 10;
-		v += (*buf - '0');
-		buf++;
-	}
-	*end = buf;
-	return v;
-}
-
-void print_dec(uint8_t *buf, uint32_t v) {
-	if (v==0) {
-		*buf='0';
-		*(buf+1)=0;
-		return;
-	}
-	uint8_t *s = buf;
-	while (v>0) {
-		*s++ = '0' + (v%10);
-		v /= 10;
-	}
-	*s=0;
-
-	// reverse
-	int len = s - buf;
-	int i;
-	uint8_t t;
-	for (i = 0; i < len/2; i++) {
-		s--;
-		t = *s;
-		*s = *buf;
-		*buf = t;
-		*buf++;
-	}
-
-}
-
-/**
- * Return 1 if v is a decimal digit. Else return 0.
- */
-int isDigit (uint8_t v) {
-	return (v>='0'&&v<='9') ? 1:0;
-}
-
-/**
- * Return zero terminated string length
- */
-int getLength (uint8_t *s) {
-	int len=0;
-	while (*s++) len++;
-	return len;
-}
-
-
-void delay (uint32_t d) {
-	while (--d != 0) {
-			__NOP();
-	}
-}
-
-/**
- * Delay for t_ms milliseconds. Uses the SysTick timer which has a resolution of
- * 10ms, so < 10ms will result in no delay.
- */
-void delayMilliseconds(uint32_t t_ms) {
-	uint32_t t_cs = t_ms/10;
-	if (t_cs==0) {
-		return;
-	}
-	uint32_t end = timeTick + t_cs;
-	while (timeTick != end) ;
-}
 
 /**
  * Blink LED 'n' times. Specify on and off time in milliseconds with on_t, off_t.
@@ -382,18 +288,28 @@ void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
 	}
 }
 
+/**
+ * Read temperature from DS18B20
+ */
 int32_t readTemperature () {
+
+	ds18b20_cmd_convert();
+
+
 	return 427; // dummy value
 }
 
-/* SysTick interrupt happens every 10 ms */
-void SysTick_Handler(void)
-{
+/**
+ * SysTick interrupt happens every 10 ms
+ **/
+void SysTick_Handler(void) {
   timeTick++;
 }
 
-void PININT1_IRQHandler(void)
-{
+/**
+ * Pin interrupt handler
+ */
+void PININT1_IRQHandler(void) {
 
 	// Eliminate switch bounce
 	if ( (timeTick-swDownTime) > 20) {
