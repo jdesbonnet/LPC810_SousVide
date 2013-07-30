@@ -22,16 +22,7 @@ uint64_t ds18b20_rom_read () {
 	// ROM read - only works with one device on the bus
 	ow_byte_write (0x33);
 
-	uint64_t addr = 0;
-
-	int i;
-	for (i = 0; i < 8; i++) {
-		addr <<= 8;
-		addr |= ow_byte_read();
-	}
-
-	return addr;
-
+	return ow_uint64_read();
 }
 
 int32_t ds18b20_temperature_read () {
@@ -64,19 +55,22 @@ int32_t ds18b20_temperature_read () {
 	// Issue command to read scratch pad
 	ow_byte_write (0xBE);
 
-	// Read data (up to 9 bytes, but only interested in first two)
-	uint64_t data = ow_uint64_read();
+	int16_t data =0;
+	data = ow_byte_read();
+	data |= ow_byte_read()<<8;
 
-	MyUARTPrintHex(LPC_USART0, data >> 32 );
-	MyUARTPrintHex(LPC_USART0, (uint32_t)(data & 0x00000000ffffffff ));
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
+	// Read data (up to 9 bytes, but only interested in first two)
+	//uint64_t data = ow_uint64_read();
+
+	//MyUARTPrintHex(LPC_USART0, data >> 32 );
+	//MyUARTPrintHex(LPC_USART0, (uint32_t)(data & 0x00000000ffffffff ));
+	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
 
 	// 16 bit temperature data is interpreted as a signed 16 bit integer.
 	// of 12 bit resolution (by default -- the DS18B20 can be configured
 	// for lower resolutions). To get °C multiply by (1/16)°C
 	// Return temperature * 10;
-	//return  (data * 10) / 16;
+	return  (data * 10) / 16;
 
-	return 111;
 
 }

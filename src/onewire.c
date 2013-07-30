@@ -122,6 +122,7 @@ int ow_byte_read () {
 	return data;
 }
 
+
 uint64_t ow_uint64_read () {
 	uint64_t data = 0;
 
