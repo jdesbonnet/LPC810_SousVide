@@ -27,14 +27,28 @@ void ow_low() {
 	GPIOSetBitValue(ow_port, ow_pin, 0);
 }
 void ow_high() {
-	// set direction output
-	GPIOSetDir(ow_port, ow_pin, 1);
-	// set high
-	GPIOSetBitValue(ow_port, ow_pin, 1);
+	// set direction input (high Z) and let pull-up R bring high
+	GPIOSetDir(ow_port, ow_pin, 0);
 }
-int ow_read_bit() {
+int ow_read() {
 	GPIOSetDir(ow_port, ow_pin, 0);
 	return GPIOGetPinValue(ow_port, ow_pin);
+}
+int ow_bit_read () {
+	GPIOSetBitValue(0,2, 0);
+	delayMicroseconds(20);
+	ow_low();
+	delayMicroseconds(20);
+	ow_high();
+	delayMicroseconds(2);
+
+	GPIOSetBitValue(0,2, 1);
+	int b = ow_read();
+	GPIOSetBitValue(0,2, 0);
+
+	delayMicroseconds(65);
+	GPIOSetBitValue(0,2, 1);
+	return b;
 }
 
 int ow_reset() {
@@ -43,29 +57,28 @@ int ow_reset() {
 	ow_high();
 	delayMicroseconds(70);
 
-	int detect = ow_read_bit();
+	int detect = ow_bit_read();
 	ow_high();
 	delayMicroseconds(410);
 
 	return detect;
 }
-void ow_write_bit (int b) {
+void ow_bit_write (int b) {
 	ow_low();
 	if (b) {
 		delayMicroseconds(6);
 		ow_high();
 		delayMicroseconds(56);
 	} else {
-		ow_low();
 		delayMicroseconds(60);
 		ow_high();
 	}
 }
-void ow_write_byte (int data) {
+void ow_byte_write (int data) {
 	int i;
 	// Send LSB first.
 	for (i = 0; i < 8; i++) {
-		ow_write_bit(data & 0x01);
+		ow_bit_write(data & 0x01);
 		data >>= 1;
 	}
 }

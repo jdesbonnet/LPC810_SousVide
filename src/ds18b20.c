@@ -15,23 +15,27 @@ int32_t ds18b20_temperature_read () {
 	}
 
 	// Skip ROM command
-	ow_write_byte (0x55);
+	ow_byte_write (0x55);
+
+	delayMicroseconds(1000);
 
 	// Issue Convert command
-	ow_write_byte (0x44);
+	ow_byte_write (0x44);
 
-	// Allow time for conversion to complete
-	delayMilliseconds (10);
+	delayMicroseconds(1000);
 
-	// Read scratch pad
-	ow_write_byte (0xBE);
+	// Poll for conversion complete
+	while ( ! ow_bit_read() ) ;
+
+	// Issue command to read scratch pad
+	ow_byte_write (0xBE);
 
 	// Read data (up to 9 bytes, but only interested in first two)
 	int i;
 	int16_t data=0;
 	for (i = 0; i < 16; i++) {
 		data >>= 1;
-		if (ow_read_bit()) {
+		if (ow_bit_read()) {
 			data |= 0x8000;
 		}
 	}

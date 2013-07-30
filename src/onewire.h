@@ -5,7 +5,8 @@ void ow_init(int port, int pin);
 void ow_low(void);
 void ow_high(void);
 int ow_reset(void);
-int ow_read_bit(void);
-void ow_write_bit(int b);
-void ow_write_byte (int data);
+int ow_read(void);
+int ow_bit_read(void);
+void ow_bit_write(int b);
+void ow_byte_write (int data);
 #endif

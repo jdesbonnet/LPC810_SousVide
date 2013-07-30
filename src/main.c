@@ -29,6 +29,8 @@
 
 #include "myuart.h"
 #include "delay.h"
+#include "onewire.h"
+#include "ds18b20.h"
 
 // Trace buffer
 #include <cr_mtb_buffer.h>
@@ -51,7 +53,7 @@ void readOutTemperature (void);
 /* SWDIO pin (PIO0_2).                               */
 //#define USE_SWD
 
-//#define USE_UART
+#define USE_UART
 
 // Interrupt channel to use with pin interrupt
 #define CHANNEL (1)
@@ -69,6 +71,9 @@ void readOutTemperature (void);
 #define SW1_PORT (0)
 #define SW1_PIN (1)
 
+#define OW_PORT (0)
+#define OW_PIN (3)
+
 volatile uint32_t timeTick = 0;
 volatile uint32_t interruptFlags = 0;
 volatile uint32_t swDownTime=0;
@@ -76,7 +81,7 @@ volatile uint32_t swDownTime=0;
 
 void configurePins()
 {
-  /* Enable SWM clock */
+  /* Enable switch-matrix (SWM) clock */
   LPC_SYSCON->SYSAHBCLKCTRL |= (1 << 7);
 
   /* Pin Assign 8 bit Configuration */
@@ -133,6 +138,8 @@ void configurePins()
 int main (void)
 {
 
+	int i;
+
 	SystemCoreClockUpdate();
 
 	SysTick_Config( SYSTICK_DELAY );
@@ -165,10 +172,16 @@ int main (void)
 #ifdef USE_UART
 	MyUARTInit(LPC_USART0, 115200);
 	LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"Welcome!\r\n");
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"Hello\r\n");
+	MyUARTPrintDecimal(LPC_USART0, -999);
 #endif
 
 
+
+
+	//
+	// Configure SW1 pin to trigger interrupt when pressed.
+	//
 	GPIOSetPinInterrupt( CHANNEL , /* channel */
 		    				SW1_PORT,
 		    				SW1_PIN,
@@ -181,7 +194,11 @@ int main (void)
 	// Configure one wire pin pull-up resistor
 	// UM10601 §6.5.6, Table 55, p64
 	// set MODE=0x02 (pull-up resistor enabled)
-	LPC_IOCON->PIO0_3 = 0x02 << 3;
+	// Pull-up too weak. Need external 4k7 R.
+	//LPC_IOCON->PIO0_3 = 0x02 << 3;
+
+	ow_init (OW_PORT,OW_PIN);
+
 	//GPIOSetDir(0,3,0);
 	//GPIOSetBitValue(0,2,0); // LED on
 	//delayMilliseconds(10000);
@@ -189,7 +206,25 @@ int main (void)
 	// Initialy delay library (to calibrate short delay loop)
 	delay_init();
 
+
+	/*
+	for (i = 0; i < 100000; i++) {
+		GPIOSetBitValue(0,2, 0);
+		delay(10);
+		GPIOSetBitValue(0,2, 1);
+		delay(10);
+	}
+	*/
+
+	for (i = 0; i < 100; i++) {
+		MyUARTPrintDecimal(LPC_USART0, ds18b20_temperature_read() );
+		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
+		blink (1,500,500);
+	}
+
+
 	// Test OW
+	/*
 	GPIOSetDir(0,3,1);
 	int i;
 	for (i = 0; i < 1000; i++) {
@@ -199,6 +234,9 @@ int main (void)
 		delayMilliseconds(10);
 		blink(1,10,10);
 	}
+	*/
+
+
 
 	/*
 	 * Get temperature set-point. This is set by pressing SW1 once for each degree C
@@ -314,7 +352,7 @@ void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
  */
 int32_t readTemperature () {
 
-	ds18b20_temperature_read();
+	//ds18b20_temperature_read();
 
 
 	return 427; // dummy value
@@ -334,11 +372,11 @@ void PININT1_IRQHandler(void) {
 
 	// Eliminate switch bounce
 	if ( (timeTick-swDownTime) > 20) {
-		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"^");
+		//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"^");
 		interruptFlags |= 0x01;
 		swDownTime = timeTick;
 	} else {
-		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"x");
+		//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"x");
 	}
 
 	// Clear the interrupt
