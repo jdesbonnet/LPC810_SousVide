@@ -47,6 +47,6 @@ void delayMicroseconds(uint32_t t_us) {
 	//uint32_t niter = (delayLoopCalibration*10000)/t_us;
 	//uint32_t niter = (t_us * 1000) / delayLoopCalibration;
 	//delay(niter);
-	uint32_t niter = t_us*14/10;
+	uint32_t niter = t_us*15/10; // manual calibration
 	delay(niter);
 }
