@@ -42,6 +42,8 @@ void delayMilliseconds (uint32_t d);
 void blink(uint32_t n, uint32_t on_t, uint32_t off_t);
 int32_t readTemperature (void);
 void readOutTemperature (void);
+void heatingElementOn(void);
+void heatingElementOff(void);
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -73,6 +75,8 @@ void readOutTemperature (void);
 
 #define OW_PORT (0)
 #define OW_PIN (3)
+
+#define BASE_TEMPERATURE (20)
 
 volatile uint32_t timeTick = 0;
 volatile uint32_t interruptFlags = 0;
@@ -138,8 +142,6 @@ void configurePins()
 int main (void)
 {
 
-	int i;
-
 	SystemCoreClockUpdate();
 
 	SysTick_Config( SYSTICK_DELAY );
@@ -199,25 +201,13 @@ int main (void)
 
 	ow_init (OW_PORT,OW_PIN);
 
-	//GPIOSetDir(0,3,0);
-	//GPIOSetBitValue(0,2,0); // LED on
-	//delayMilliseconds(10000);
 
-	// Initialy delay library (to calibrate short delay loop)
+	// Initialize delay library (to calibrate short delay loop)
 	delay_init();
 
 
 	/*
-	for (i = 0; i < 100000; i++) {
-		GPIOSetBitValue(0,2, 0);
-		delay(10);
-		GPIOSetBitValue(0,2, 1);
-		delay(10);
-	}
-	*/
-
 	uint64_t rom_addr;
-
 	for (i = 0; i < 100; i++) {
 		rom_addr = ds18b20_rom_read();
 		MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
@@ -229,20 +219,8 @@ int main (void)
 		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
 		blink (1,500,500);
 	}
-
-
-	// Test OW
-	/*
-	GPIOSetDir(0,3,1);
-	int i;
-	for (i = 0; i < 1000; i++) {
-		GPIOSetBitValue(0,3,1);
-		delayMicroseconds(100);
-		GPIOSetBitValue(0,3,0);
-		delayMilliseconds(10);
-		blink(1,10,10);
-	}
 	*/
+
 
 
 
@@ -281,7 +259,7 @@ int main (void)
 	 * mode can only be exited by reset/power cycle. At any time the user can press
 	 * the UI button and the temperature will be readout by blinking the LED.
 	 */
-	int32_t setPointTemperature = 540 + 10*nButtonPress;
+	int32_t setPointTemperature = /* 540 */ 200 + 10*nButtonPress;
 	int32_t currentTemperature;
 	while (1) {
 
@@ -290,14 +268,17 @@ int main (void)
 
 		// Slow blink if under temperature
 		if (currentTemperature < (setPointTemperature-10) ) {
+			heatingElementOn();
 			blink (1, 2000, 2000);
 		}
 		// Fast blink if over temperature
 		else if (currentTemperature > (setPointTemperature+10) ) {
-			blink (1, 500, 500);
+			heatingElementOff();
+			blink (1, 250, 250);
 		}
 		// Solid on if at setpoint (blink with 0 off time)
 		else {
+			heatingElementOff();
 			blink (1, 500, 0);
 		}
 
@@ -357,15 +338,20 @@ void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
 
 /**
  * Read temperature from DS18B20
+ * @Return in °C*10 eg 274 = 27.4°C
  */
 int32_t readTemperature () {
-
-	//ds18b20_temperature_read();
-
-
-	return 427; // dummy value
+	return ds18b20_temperature_read();
 }
 
+void heatingElementOn() {
+	GPIOSetDir(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
+	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
+}
+void heatingElementOff() {
+	GPIOSetDir(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 0);
+	//GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
+}
 /**
  * SysTick interrupt happens every 10 ms
  **/
