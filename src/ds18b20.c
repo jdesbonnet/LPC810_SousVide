@@ -6,11 +6,40 @@
 
 // http://datasheets.maximintegrated.com/en/ds/DS18B20.pdf
 
-int32_t ds18b20_cmd_convert () {
+/**
+ * Assume there is just one DS18B20 device on the bus.
+ */
+int32_t ds18b20_temperature_read () {
 	if ( ! ow_reset() ) {
 		return -999;
 	}
 
+	// Skip ROM command
+	ow_write_byte (0x55);
+
 	// Issue Convert command
 	ow_write_byte (0x44);
+
+	// Allow time for conversion to complete
+	delayMilliseconds (10);
+
+	// Read scratch pad
+	ow_write_byte (0xBE);
+
+	// Read data (up to 9 bytes, but only interested in first two)
+	int i;
+	int16_t data=0;
+	for (i = 0; i < 16; i++) {
+		data >>= 1;
+		if (ow_read_bit()) {
+			data |= 0x8000;
+		}
+	}
+
+	// 16 bit temperature data is interpreted as a signed 16 bit integer.
+	// of 12 bit resolution (by default -- the DS18B20 can be configured
+	// for lower resolutions). To get °C multiply by (1/16)°C
+	// Return temperature * 10;
+	return  (data * 10) / 16;
+
 }

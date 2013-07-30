@@ -32,7 +32,7 @@ void ow_high() {
 	// set high
 	GPIOSetBitValue(ow_port, ow_pin, 1);
 }
-int ow_read() {
+int ow_read_bit() {
 	GPIOSetDir(ow_port, ow_pin, 0);
 	return GPIOGetPinValue(ow_port, ow_pin);
 }
@@ -43,7 +43,7 @@ int ow_reset() {
 	ow_high();
 	delayMicroseconds(70);
 
-	int detect = ow_read();
+	int detect = ow_read_bit();
 	ow_high();
 	delayMicroseconds(410);
 

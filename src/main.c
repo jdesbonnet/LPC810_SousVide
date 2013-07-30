@@ -179,6 +179,17 @@ int main (void)
 		    		0 /* falling edge */ );
 
 
+	// Test OW
+	GPIOSetDir(0,3,1);
+	int i;
+	for (i = 0; i < 1000; i++) {
+		GPIOSetBitValue(0,3,1);
+		delayMilliseconds(10);
+		GPIOSetBitValue(0,3,0);
+		delayMilliseconds(10);
+		blink(1,10,10);
+	}
+
 	/*
 	 * Get temperature set-point. This is set by pressing SW1 once for each degree C
 	 * above 54°C. Ie one press (the minimum) is 55°C. A pause of more than 5 seconds
@@ -293,7 +304,7 @@ void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
  */
 int32_t readTemperature () {
 
-	ds18b20_cmd_convert();
+	ds18b20_temperature_read();
 
 
 	return 427; // dummy value
