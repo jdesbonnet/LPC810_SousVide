@@ -63,7 +63,7 @@ void heatingElementOff(void);
 
 #define HEATING_ELEMENT_EN
 #define HEATING_ELEMENT_PORT (0)
-#define HEATING_ELEMENT_PIN (5)
+#define HEATING_ELEMENT_PIN (0)
 
 #define ULED1_EN
 #define ULED1_PORT (0)
@@ -76,7 +76,8 @@ void heatingElementOff(void);
 #define OW_PORT (0)
 #define OW_PIN (3)
 
-#define BASE_TEMPERATURE (20)
+#define BASE_TEMPERATURE (540)
+#define SEP ' '
 
 volatile uint32_t timeTick = 0;
 volatile uint32_t interruptFlags = 0;
@@ -88,6 +89,8 @@ void configurePins()
   /* Enable switch-matrix (SWM) clock */
   LPC_SYSCON->SYSAHBCLKCTRL |= (1 << 7);
 
+
+#if 0
   /* Pin Assign 8 bit Configuration */
   /* U0_TXD */
   /* U0_RXD */
@@ -121,6 +124,27 @@ void configurePins()
        ------------------------------------------------ */
     LPC_SWM->PINENABLE0 = 0xffffffb3UL;
   #endif
+#endif
+
+
+    /*
+    Aiming for:
+    PIO0_5 = RESET
+    PIO0_4 = U0_TXD
+    PIO0_3 = GPIO            - Disables SWDCLK
+    PIO0_2 = GPIO (User LED) - Disables SWDIO
+    PIO0_1 = GPIO
+    PIO0_0 = GPIO
+	*/
+
+    /* Pin Assign 8 bit Configuration */
+    /* U0_TXD */
+    LPC_SWM->PINASSIGN0 = 0xffffff04UL;
+
+    /* Pin Assign 1 bit Configuration */
+    /* RESET */
+    LPC_SWM->PINENABLE0 = 0xffffffbfUL;
+
 
 #ifdef ULED1_EN
     // Set LED driver pin as output and set to logic high
@@ -131,6 +155,8 @@ void configurePins()
     GPIOSetDir(SW1_PORT,SW1_PIN,0);
 #endif
 
+
+	GPIOSetDir(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
 
 
 
@@ -220,7 +246,16 @@ int main (void)
 	}
 	*/
 
-
+	// Test heating element pin
+	int i;
+	/*
+	for (i = 0; i < 100; i++) {
+		heatingElementOn();
+		delayMilliseconds(100);
+		heatingElementOff();
+		delayMilliseconds(100);
+	}
+	*/
 
 
 	/*
@@ -258,7 +293,7 @@ int main (void)
 	 * mode can only be exited by reset/power cycle. At any time the user can press
 	 * the UI button and the temperature will be readout by blinking the LED.
 	 */
-	int32_t setPointTemperature = /* 540 */ 200 + 10*nButtonPress; // 20°C for testing
+	int32_t setPointTemperature =  BASE_TEMPERATURE + 10*nButtonPress; // 20°C for testing
 	int32_t currentTemperature;
 	while (1) {
 
@@ -267,9 +302,9 @@ int main (void)
 
 		// Log temperature to serial port
 		MyUARTPrintDecimal(LPC_USART0, timeTick );
-		MyUARTSendByte (LPC_USART0, ',');
+		MyUARTSendByte (LPC_USART0, SEP);
 		MyUARTPrintDecimal(LPC_USART0, currentTemperature );
-		MyUARTSendByte (LPC_USART0, ',');
+		MyUARTSendByte (LPC_USART0, SEP);
 		MyUARTPrintDecimal(LPC_USART0, setPointTemperature );
 		MyUARTSendByte (LPC_USART0, '\r');
 		MyUARTSendByte (LPC_USART0, '\n');
@@ -353,12 +388,10 @@ int32_t readTemperature () {
 }
 
 void heatingElementOn() {
-	GPIOSetDir(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
 	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
 }
 void heatingElementOff() {
-	GPIOSetDir(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 0);
-	//GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
+	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 0);
 }
 /**
  * SysTick interrupt happens every 10 ms
