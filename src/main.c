@@ -295,10 +295,30 @@ int main (void)
 	 */
 	int32_t setPointTemperature =  BASE_TEMPERATURE + 10*nButtonPress; // 20°C for testing
 	int32_t currentTemperature;
+	int32_t error, prevError=0;
+	int32_t integral=0,derivative=0;
+	int32_t dt;
+	uint32_t prevTime = timeTick;
+	uint32_t now;
+	int32_t Kp=1, Ki=1, Kd=1;
+	int32_t output;
+
 	while (1) {
 
 		// Read temperature in 0.1°C units. Eg 452 = 45.2°C.
 		currentTemperature = readTemperature();
+
+
+		// PID calculations
+		error = setPointTemperature - currentTemperature;
+		now = timeTick;
+		dt = now - prevTime;
+		integral = integral + error*dt;
+		derivative = (error - prevError)/dt;
+		output = Kp*error + Ki*integral + Kd*derivative;
+		prevError = error;
+		prevTime = now;
+
 
 		// Log temperature to serial port
 		MyUARTPrintDecimal(LPC_USART0, timeTick );
@@ -306,8 +326,11 @@ int main (void)
 		MyUARTPrintDecimal(LPC_USART0, currentTemperature );
 		MyUARTSendByte (LPC_USART0, SEP);
 		MyUARTPrintDecimal(LPC_USART0, setPointTemperature );
+		MyUARTSendByte (LPC_USART0, SEP);
+		MyUARTPrintDecimal(LPC_USART0, output );
 		MyUARTSendByte (LPC_USART0, '\r');
 		MyUARTSendByte (LPC_USART0, '\n');
+
 
 		// Slow blink if under temperature
 		if (currentTemperature < (setPointTemperature-10) ) {
