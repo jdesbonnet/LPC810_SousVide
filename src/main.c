@@ -300,8 +300,9 @@ int main (void)
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t Kp=1, Ki=1, Kd=1;
+	int32_t Kp=100, Ki=1, Kd=1000;
 	int32_t output;
+	int32_t heater_status = 0;
 
 	while (1) {
 
@@ -313,11 +314,13 @@ int main (void)
 		error = setPointTemperature - currentTemperature;
 		now = timeTick;
 		dt = now - prevTime;
-		integral = integral + error*dt;
-		derivative = (error - prevError)/dt;
+		integral += (error*dt)/100;
+		derivative = ((error - prevError)*10000)/dt;
 		output = Kp*error + Ki*integral + Kd*derivative;
 		prevError = error;
 		prevTime = now;
+
+		heater_status  = ((int32_t)(timeTick % 10000) > output) ? 0 : 1;
 
 
 		// Log temperature to serial port
@@ -326,12 +329,29 @@ int main (void)
 		MyUARTPrintDecimal(LPC_USART0, currentTemperature );
 		MyUARTSendByte (LPC_USART0, SEP);
 		MyUARTPrintDecimal(LPC_USART0, setPointTemperature );
+
+		MyUARTSendByte (LPC_USART0, SEP);
+		MyUARTSendByte (LPC_USART0, SEP);
+		MyUARTSendByte (LPC_USART0, SEP);
+
+		MyUARTPrintDecimal(LPC_USART0, Kp*error );
+
+		MyUARTSendByte (LPC_USART0, SEP);
+		MyUARTPrintDecimal(LPC_USART0, Ki*integral );
+
+		MyUARTSendByte (LPC_USART0, SEP);
+		MyUARTPrintDecimal(LPC_USART0, Kd*derivative );
+
 		MyUARTSendByte (LPC_USART0, SEP);
 		MyUARTPrintDecimal(LPC_USART0, output );
+
+		MyUARTSendByte (LPC_USART0, SEP);
+		MyUARTPrintDecimal(LPC_USART0, heater_status );
+
 		MyUARTSendByte (LPC_USART0, '\r');
 		MyUARTSendByte (LPC_USART0, '\n');
 
-
+#ifdef BANG_BANG
 		// Slow blink if under temperature
 		if (currentTemperature < (setPointTemperature-10) ) {
 			heatingElementOn();
@@ -347,7 +367,16 @@ int main (void)
 			heatingElementOff();
 			blink (1, 500, 0);
 		}
+#endif
 
+		if ( heater_status ) {
+			heatingElementOn();
+		} else {
+			heatingElementOff();
+		}
+		blink (1,500,500);
+
+		delayMilliseconds(10000);
 
 		// Did we receive a button press?
 		if (interruptFlags & 0x01) {
