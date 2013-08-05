@@ -76,7 +76,8 @@ void heatingElementOff(void);
 #define OW_PORT (0)
 #define OW_PIN (3)
 
-#define BASE_TEMPERATURE (540)
+#define BASE_TEMPERATURE (54000)
+
 #define SEP ' '
 
 volatile uint32_t timeTick = 0;
@@ -293,20 +294,21 @@ int main (void)
 	 * mode can only be exited by reset/power cycle. At any time the user can press
 	 * the UI button and the temperature will be readout by blinking the LED.
 	 */
-	int32_t setPointTemperature =  BASE_TEMPERATURE + 10*nButtonPress; // 20°C for testing
+	int32_t setPointTemperature =  BASE_TEMPERATURE
+			+ 1000*nButtonPress;
 	int32_t currentTemperature;
 	int32_t error, prevError=0;
 	int32_t integral=0,derivative=0;
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t Kp=100, Ki=1, Kd=1000;
+	int32_t Kp=1, Ki=0, Kd=0;
 	int32_t output;
 	int32_t heater_status = 0;
 
 	while (1) {
 
-		// Read temperature in 0.1°C units. Eg 452 = 45.2°C.
+		// Read temperature in 0.001°C units. Eg 45200 = 45.2°C.
 		currentTemperature = readTemperature();
 
 
@@ -353,12 +355,12 @@ int main (void)
 
 #ifdef BANG_BANG
 		// Slow blink if under temperature
-		if (currentTemperature < (setPointTemperature-10) ) {
+		if (currentTemperature < (setPointTemperature-500) ) {
 			heatingElementOn();
 			blink (1, 2000, 2000);
 		}
 		// Fast blink if over temperature
-		else if (currentTemperature > (setPointTemperature+10) ) {
+		else if (currentTemperature > (setPointTemperature+500) ) {
 			heatingElementOff();
 			blink (1, 250, 250);
 		}
@@ -402,7 +404,7 @@ int main (void)
  * Example: 60°C: 6 x normal blinks, delay of 2s, 1 short blink.
  */
 void readOutTemperature (void) {
-	int32_t currentTemperatureDeg = readTemperature()/10;
+	int32_t currentTemperatureDeg = readTemperature()/1000;
 
 	// Tens
 	blink(currentTemperatureDeg/10,500,500);
@@ -433,7 +435,7 @@ void blink (uint32_t n, uint32_t on_t, uint32_t off_t) {
 
 /**
  * Read temperature from DS18B20
- * @Return in °C*10 eg 274 = 27.4°C
+ * @Return in °C*1000 eg 27400 = 27.4°C
  */
 int32_t readTemperature () {
 	return ds18b20_temperature_read();
@@ -470,5 +472,3 @@ void PININT1_IRQHandler(void) {
 	LPC_PIN_INT->IST = (1<<CHANNEL);
 	return;
 }
-
-

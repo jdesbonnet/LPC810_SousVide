@@ -25,9 +25,12 @@ uint64_t ds18b20_rom_read () {
 	return ow_uint64_read();
 }
 
+/**
+ * Return temperature in 0.001C units. eg 12100 = 12.1C
+ */
 int32_t ds18b20_temperature_read () {
 	if ( ! ow_reset() ) {
-		return -999;
+		return -9999;
 	}
 
 	// Skip ROM command
@@ -40,12 +43,8 @@ int32_t ds18b20_temperature_read () {
 
 	delayMicroseconds(800);
 
-
-
-
-
 	if ( ! ow_reset() ) {
-		return -999;
+		return -9999;
 	}
 	// Skip ROM command
 	ow_byte_write (0xCC);
@@ -70,7 +69,7 @@ int32_t ds18b20_temperature_read () {
 	// of 12 bit resolution (by default -- the DS18B20 can be configured
 	// for lower resolutions). To get °C multiply by (1/16)°C
 	// Return temperature * 10;
-	return  (data * 10) / 16;
+	return  (data * 1000) / 16;
 
 
 }
