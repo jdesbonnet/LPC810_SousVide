@@ -306,7 +306,7 @@ int main (void)
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t Kp=1, Ki=0, Kd=0;
+	int32_t Kp=2, Ki=0, Kd=0;
 	int32_t output;
 	//int32_t heater_status = 0;
 
