@@ -460,7 +460,7 @@ void heatingElementOff() {
  **/
 void SysTick_Handler(void) {
 	timeTick++;
-	if ( (timeTick%HEATER_PWM_PERIOD) > heaterDutyCycle) {
+	if ( (timeTick%HEATER_PWM_PERIOD) >= heaterDutyCycle) {
 		heatingElementOff();
 		heaterStatus = 0;
 	} else {
