@@ -78,12 +78,16 @@ void heatingElementOff(void);
 
 #define BASE_TEMPERATURE (54000)
 
+#define HEATER_PWM_PERIOD (1000)
+
 #define SEP ' '
 
 volatile uint32_t timeTick = 0;
 volatile uint32_t interruptFlags = 0;
 volatile uint32_t swDownTime=0;
 
+volatile uint32_t heaterDutyCycle = 0;
+volatile uint32_t heaterStatus = 0;
 
 void configurePins()
 {
@@ -304,7 +308,7 @@ int main (void)
 	uint32_t now;
 	int32_t Kp=1, Ki=0, Kd=0;
 	int32_t output;
-	int32_t heater_status = 0;
+	//int32_t heater_status = 0;
 
 	while (1) {
 
@@ -322,7 +326,9 @@ int main (void)
 		prevError = error;
 		prevTime = now;
 
-		heater_status  = ((int32_t)(timeTick % 10000) > output) ? 0 : 1;
+		heaterDutyCycle = output/10;
+
+		//heater_status  = ((int32_t)(timeTick % 10000) > output) ? 0 : 1;
 
 
 		// Log temperature to serial port
@@ -348,7 +354,7 @@ int main (void)
 		MyUARTPrintDecimal(LPC_USART0, output );
 
 		MyUARTSendByte (LPC_USART0, SEP);
-		MyUARTPrintDecimal(LPC_USART0, heater_status );
+		MyUARTPrintDecimal(LPC_USART0, heaterStatus );
 
 		MyUARTSendByte (LPC_USART0, '\r');
 		MyUARTSendByte (LPC_USART0, '\n');
@@ -371,11 +377,13 @@ int main (void)
 		}
 #endif
 
+		/*
 		if ( heater_status ) {
 			heatingElementOn();
 		} else {
 			heatingElementOff();
 		}
+		*/
 		blink (1,500,500);
 
 		delayMilliseconds(10000);
@@ -451,7 +459,14 @@ void heatingElementOff() {
  * SysTick interrupt happens every 10 ms
  **/
 void SysTick_Handler(void) {
-  timeTick++;
+	timeTick++;
+	if ( (timeTick%HEATER_PWM_PERIOD) > heaterDutyCycle) {
+		heatingElementOff();
+		heaterStatus = 0;
+	} else {
+		heatingElementOn();
+		heaterStatus = 1;
+	}
 }
 
 /**
