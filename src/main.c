@@ -467,6 +467,10 @@ void heatingElementOff() {
  * Set the heating element duty cycle. Allowed values 0 - 1023.
  */
 void setHeaterDutyCycle (int dutyCycle) {
+	if (dutyCycle < 0) {
+		heaterDutyCycle=0;
+		return;
+	}
 	heaterDutyCycle = (dutyCycle * HEATER_PWM_PERIOD) / 1024;
 }
 
