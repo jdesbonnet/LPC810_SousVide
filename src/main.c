@@ -78,7 +78,8 @@ void heatingElementOff(void);
 
 #define BASE_TEMPERATURE (54000)
 
-#define HEATER_PWM_PERIOD (1000)
+/** Heater PWM cycle period in SysTicks (10ms) */
+#define HEATER_PWM_PERIOD (3000)
 
 #define SEP ' '
 
@@ -87,6 +88,8 @@ volatile uint32_t interruptFlags = 0;
 volatile uint32_t swDownTime=0;
 
 volatile uint32_t heaterDutyCycle = 0;
+
+/** Set to 1 if element is on, 0 if off */
 volatile uint32_t heaterStatus = 0;
 
 void configurePins()
@@ -306,9 +309,9 @@ int main (void)
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t Kp=2, Ki=0, Kd=0;
+	int32_t Kp=50, Ki=1, Kd=0;
 	int32_t output;
-	//int32_t heater_status = 0;
+	int32_t heaterDutyCycle = 0;
 
 	while (1) {
 
@@ -320,13 +323,16 @@ int main (void)
 		error = setPointTemperature - currentTemperature;
 		now = timeTick;
 		dt = now - prevTime;
-		integral += (error*dt)/100;
+		integral += (error*dt)/1000;
 		derivative = ((error - prevError)*10000)/dt;
 		output = Kp*error + Ki*integral + Kd*derivative;
 		prevError = error;
 		prevTime = now;
 
-		heaterDutyCycle = output/10;
+		// So say for 10C error, output = 10000*Kp.
+
+		heaterDutyCycle = output/1000;
+		setHeaterDutyCycle(heaterDutyCycle);
 
 		//heater_status  = ((int32_t)(timeTick % 10000) > output) ? 0 : 1;
 
@@ -354,7 +360,7 @@ int main (void)
 		MyUARTPrintDecimal(LPC_USART0, output );
 
 		MyUARTSendByte (LPC_USART0, SEP);
-		MyUARTPrintDecimal(LPC_USART0, heaterStatus );
+		MyUARTPrintDecimal(LPC_USART0, heaterDutyCycle );
 
 		MyUARTSendByte (LPC_USART0, '\r');
 		MyUARTSendByte (LPC_USART0, '\n');
@@ -455,6 +461,15 @@ void heatingElementOn() {
 void heatingElementOff() {
 	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 0);
 }
+
+
+/**
+ * Set the heating element duty cycle. Allowed values 0 - 1023.
+ */
+void setHeaterDutyCycle (int dutyCycle) {
+	heaterDutyCycle = (dutyCycle * HEATER_PWM_PERIOD) / 1024;
+}
+
 /**
  * SysTick interrupt happens every 10 ms
  **/
