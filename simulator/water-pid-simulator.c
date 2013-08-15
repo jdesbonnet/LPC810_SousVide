@@ -28,7 +28,7 @@ int main (int argc, char ** argv) {
 	double set_point_temperature = 60;
 
 	double sensor_time_constant = 1.0/300.0;
-	double cooling_constant = 0.001;
+	double cooling_constant = 0.0001;
 
 	double integral = 0;
 	double derivative = 0;
@@ -37,28 +37,41 @@ int main (int argc, char ** argv) {
 
 	int element_on = 0;
 
-	for (time = 0; time < 3600.0; time+=dt) {
+	Kp = atol(argv[1]);
+	Ki = atol(argv[2]);
+	Kd = atol(argv[3]);
 
+	for (time = 0; time < 7200.0; time+=dt) {
+
+		//
 		// Update the model
+		//
+
+		// Energy in from heating element
 		if (element_on) {
 			water_temperature += element_power * water_quantity * dt / SHC_H2O;
 		}
+
+		// Energy out due to heat loss
 		water_temperature -= (water_temperature - ambient_temperature) * dt * cooling_constant;
 		if (water_temperature > 100.0) {
 			water_temperature = 100.0;
-		} 
+		}
+
+		// Temperature sensor
 		sensor_temperature += (water_temperature - sensor_temperature) * dt * sensor_time_constant; // ?
 
 
-		// Update PID calculations
+		// Update PID calculations.
 		error = set_point_temperature - sensor_temperature;
+		//error = set_point_temperature - water_temperature;
 		integral += error*dt;
 		derivative = (error-prev_error)/dt;
 		output = Kp * error + Ki * integral + Kd * derivative;
 		prev_error = error;
 
 		// Heater element PWM
-		if (output <= 0) {
+		if (output <= 0 || time > 3600) {
 			element_on = 0;
 		} else {
 			element_on = ( (output/10.0) > fmod(time,100.0) ) ? 0 : 1;
