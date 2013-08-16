@@ -54,6 +54,12 @@ int main (int argc, char ** argv) {
 			i++;
 		}
 
+
+		if (strcmp("-setpoint",argv[i])==0) {
+			param.set_point_temperature = atol(argv[i+1]);
+			i++;
+		}
+
 		if (strcmp("-Kp",argv[i])==0) {
 			param.Kp = atol(argv[i+1]);
 			i++;
@@ -140,12 +146,12 @@ int run_simulation (simulation_parameters_t param) {
 
 
 		// Simulation iteration is every dt, but PID is evaluated less often.
-		if (i++ % 100 == 0) {
+		if (i++ % 10 == 0) {
 			// Update PID calculations.
 			error = param.set_point_temperature - sensor_temperature;
 		
-			integral += error*dt*100;
-			derivative = (error-prev_error)/(dt*100);
+			integral += error*dt*10;
+			derivative = (error-prev_error)/(dt*10);
 			output = param.Kp * error + param.Ki * integral + param.Kd * derivative;
 			prev_error = error;
 
@@ -165,10 +171,7 @@ int run_simulation (simulation_parameters_t param) {
 
 		heater_on = (fmod(time,param.heater_pwm_period) >= heater_pwm_dutycycle * param.heater_pwm_period )  ?  0 : 1;
 
-		fprintf (stdout, "%f %f %f   %f %f %f %d    %f %f\n", time, water_temperature, sensor_temperature, error, output, heater_pwm_dutycycle, heater_on,
-heater_pwm_dutycycle * param.heater_pwm_period,
-fmod(time,param.heater_pwm_period)
-			);
+		fprintf (stdout, "%f %f %f   %f %f %f %d %f\n", time, water_temperature, sensor_temperature, error, output, heater_pwm_dutycycle, heater_on , integral);
 	}
 
 	fprintf (stderr,"settle_time=%f\n", settle_time);
