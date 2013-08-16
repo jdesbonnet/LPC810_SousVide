@@ -6,6 +6,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>
 
 // Specific heat capacity of water (J/kg/K)
@@ -14,8 +15,8 @@
 typedef struct {
 	double t_start;
 	double t_end;
-	double set_point_temperature;
 	double dt;
+	double set_point_temperature;
 	double Kp;
 	double Ki;
 	double Kd;
@@ -34,10 +35,8 @@ int main (int argc, char ** argv) {
 	// defaults
 	param.t_start=0.0;
 	param.t_end=7200.0;
+	param.dt = 0.1;
 	param.set_point_temperature=60.0;
-	param.Kp = atol(argv[1]);
-	param.Ki = atol(argv[2]);
-	param.Kd = atol(argv[3]);
 	param.water_mass = 1.0;
 	param.ambient_temperature = 20.0;
 	param.sensor_time_constant = 1.0/300.0;
@@ -46,42 +45,47 @@ int main (int argc, char ** argv) {
 
 	for (i = 1; i < argc; i++) {
 		if (strcmp("-ts",argv[i])==0) {
-			param.t_start = atol(argv[i+1]);
+			param.t_start = atof(argv[i+1]);
 			i++;
 		}
 		if (strcmp("-te",argv[i])==0) {
-			param.t_end = atol(argv[i+1]);
+			param.t_end = atof(argv[i+1]);
 			i++;
 		}
 
+		if (strcmp("-dt",argv[i])==0) {
+			param.dt = atof(argv[i+1]);
+			i++;
+		}
 
 		if (strcmp("-setpoint",argv[i])==0) {
-			param.set_point_temperature = atol(argv[i+1]);
+			param.set_point_temperature = atof(argv[i+1]);
 			i++;
 		}
 
 		if (strcmp("-Kp",argv[i])==0) {
-			param.Kp = atol(argv[i+1]);
+			param.Kp = atof(argv[i+1]);
 			i++;
+
 		}
 		if (strcmp("-Ki",argv[i])==0) {
-			param.Ki = atol(argv[i+1]);
+			param.Ki = atof(argv[i+1]);
 			i++;
 		}
 		if (strcmp("-Kd",argv[i])==0) {
-			param.Kd = atol(argv[i+1]);
+			param.Kd = atof(argv[i+1]);
 			i++;
 		}
 		if (strcmp("-l",argv[i])==0) {
-			param.water_mass = atol(argv[i+1]);
+			param.water_mass = atof(argv[i+1]);
 			i++;
 		}
 		if (strcmp("-tol",argv[i])==0) {
-			param.temperature_tolerance = atol(argv[i+1]);
+			param.temperature_tolerance = atof(argv[i+1]);
 			i++;
 		}
 		if (strcmp("-pwmp",argv[i])==0) {
-			param.heater_pwm_period = atol(argv[i+1]);
+			param.heater_pwm_period = atof(argv[i+1]);
 			i++;
 		}
 	}
@@ -150,7 +154,7 @@ int run_simulation (simulation_parameters_t param) {
 			// Update PID calculations.
 			error = param.set_point_temperature - sensor_temperature;
 		
-			integral += error*dt*10;
+			integral += error*dt*10.0;
 			derivative = (error-prev_error)/(dt*10);
 			output = param.Kp * error + param.Ki * integral + param.Kd * derivative;
 			prev_error = error;
@@ -158,7 +162,8 @@ int run_simulation (simulation_parameters_t param) {
 			// Heater element PWM
 			if (output <= 0) {
 			//if (output <= 0 || time > 3600) {
-				heater_on = 0;
+				//heater_on = 0;
+				heater_pwm_dutycycle=0;
 			} else {
 				heater_pwm_dutycycle = output/100.0;
 				if (heater_pwm_dutycycle>1.0) {
@@ -171,7 +176,11 @@ int run_simulation (simulation_parameters_t param) {
 
 		heater_on = (fmod(time,param.heater_pwm_period) >= heater_pwm_dutycycle * param.heater_pwm_period )  ?  0 : 1;
 
-		fprintf (stdout, "%f %f %f   %f %f %f %d %f\n", time, water_temperature, sensor_temperature, error, output, heater_pwm_dutycycle, heater_on , integral);
+		fprintf (stdout, "%f %f %f   %f %f %f %d   %f %f %f %f %f\n", time, water_temperature, sensor_temperature, error, output, heater_pwm_dutycycle, heater_on , 
+				param.Kp*error,
+				param.Ki, integral, param.Ki*integral,
+				param.Kd*derivative
+		);
 	}
 
 	fprintf (stderr,"settle_time=%f\n", settle_time);
