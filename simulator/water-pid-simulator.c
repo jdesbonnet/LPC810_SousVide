@@ -22,6 +22,8 @@ typedef struct {
 	double water_mass; // Mass of water in kg
 	double ambient_temperature; // Ambient temperature in °C
 	double sensor_time_constant; // Sensor temperature equalization tc
+	double temperature_tolerance; // Max +/- °C allowed
+	double heater_pwm_period;
 } simulation_parameters_t;
 
 int main (int argc, char ** argv) {
@@ -39,6 +41,8 @@ int main (int argc, char ** argv) {
 	param.water_mass = 1.0;
 	param.ambient_temperature = 20.0;
 	param.sensor_time_constant = 1.0/300.0;
+	param.temperature_tolerance = 0.25;
+	param.heater_pwm_period = 60;
 
 	for (i = 1; i < argc; i++) {
 		if (strcmp("-ts",argv[i])==0) {
@@ -66,6 +70,14 @@ int main (int argc, char ** argv) {
 			param.water_mass = atol(argv[i+1]);
 			i++;
 		}
+		if (strcmp("-tol",argv[i])==0) {
+			param.temperature_tolerance = atol(argv[i+1]);
+			i++;
+		}
+		if (strcmp("-pwmp",argv[i])==0) {
+			param.heater_pwm_period = atol(argv[i+1]);
+			i++;
+		}
 	}
 
 	run_simulation(param);
@@ -74,7 +86,7 @@ int main (int argc, char ** argv) {
 int run_simulation (simulation_parameters_t param) {
 
 	int i = 0;
-	double element_power = 400;
+	double heater_power = 400;
 	double dt = 0.1;
 
 	double time;
@@ -89,7 +101,11 @@ int run_simulation (simulation_parameters_t param) {
 	double prev_error = param.set_point_temperature - sensor_temperature;
 	double output;
 
-	int element_on = 0;
+	int heater_on = 0;
+	double heater_pwm_dutycycle = 0;
+
+	// Time at which temperature has settled within tolerated range
+	double settle_time;
 
 
 
@@ -100,8 +116,8 @@ int run_simulation (simulation_parameters_t param) {
 		//
 
 		// Energy in from heating element
-		if (element_on) {
-			water_temperature += element_power * param.water_mass * dt / SHC_H2O;
+		if (heater_on) {
+			water_temperature += heater_power * param.water_mass * dt / SHC_H2O;
 		}
 
 		// Energy out due to heat loss
@@ -112,6 +128,15 @@ int run_simulation (simulation_parameters_t param) {
 
 		// Temperature sensor
 		sensor_temperature += (water_temperature - sensor_temperature) * dt * param.sensor_time_constant; // ?
+
+		if ( (water_temperature < param.set_point_temperature+param.temperature_tolerance) 
+			&& (water_temperature > param.set_point_temperature-param.temperature_tolerance) ) {
+			if (settle_time==0) {
+				settle_time=time;
+			}
+		} else {
+			settle_time=0;
+		}
 
 
 		// Simulation iteration is every dt, but PID is evaluated less often.
@@ -127,14 +152,26 @@ int run_simulation (simulation_parameters_t param) {
 			// Heater element PWM
 			if (output <= 0) {
 			//if (output <= 0 || time > 3600) {
-				element_on = 0;
+				heater_on = 0;
 			} else {
-				element_on = ( (output/10.0) >= fmod(time,300.0) ) ? 0 : 1;
+				heater_pwm_dutycycle = output/100.0;
+				if (heater_pwm_dutycycle>1.0) {
+					heater_pwm_dutycycle = 1.0;
+				}
+
+				
 			}
 		}
 
-		fprintf (stdout, "%f %f %f   %f %f  %d\n", time, water_temperature, sensor_temperature, error, output, element_on);
+		heater_on = (fmod(time,param.heater_pwm_period) >= heater_pwm_dutycycle * param.heater_pwm_period )  ?  0 : 1;
+
+		fprintf (stdout, "%f %f %f   %f %f %f %d    %f %f\n", time, water_temperature, sensor_temperature, error, output, heater_pwm_dutycycle, heater_on,
+heater_pwm_dutycycle * param.heater_pwm_period,
+fmod(time,param.heater_pwm_period)
+			);
 	}
+
+	fprintf (stderr,"settle_time=%f\n", settle_time);
 
 }
 
