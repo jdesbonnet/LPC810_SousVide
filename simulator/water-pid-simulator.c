@@ -139,8 +139,8 @@ int run_simulation (simulation_parameters_t param) {
 		// Temperature sensor
 		sensor_temperature += (water_temperature - sensor_temperature) * dt * param.sensor_time_constant; // ?
 
-		if ( (water_temperature < param.set_point_temperature+param.temperature_tolerance) 
-			&& (water_temperature > param.set_point_temperature-param.temperature_tolerance) ) {
+		if ( (water_temperature >= param.set_point_temperature-param.temperature_tolerance) 
+			&& (water_temperature < param.set_point_temperature+param.temperature_tolerance) ) {
 			if (settle_time==0) {
 				settle_time=time;
 			}
@@ -176,9 +176,9 @@ int run_simulation (simulation_parameters_t param) {
 
 		heater_on = (fmod(time,param.heater_pwm_period) >= heater_pwm_dutycycle * param.heater_pwm_period )  ?  0 : 1;
 
-		fprintf (stdout, "%f %f %f   %f %f %f %d   %f %f %f %f %f\n", time, water_temperature, sensor_temperature, error, output, heater_pwm_dutycycle, heater_on , 
+		fprintf (stdout, "%f %f %f   %f %f %f %d   %f %f %f\n", time, water_temperature, sensor_temperature, error, output, heater_pwm_dutycycle, heater_on , 
 				param.Kp*error,
-				param.Ki, integral, param.Ki*integral,
+				param.Ki*integral,
 				param.Kd*derivative
 		);
 	}
