@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 
 // Specific heat capacity of water (J/kg/K)
@@ -93,6 +94,11 @@ int main (int argc, char ** argv) {
 	run_simulation(param);
 }
 
+int time_equals(double ta, double tb) {
+	double d = tb-ta;
+	return (d < 1e-6 && d > -1e-6);
+}
+
 int run_simulation (simulation_parameters_t param) {
 
 	int i = 0;
@@ -116,6 +122,9 @@ int run_simulation (simulation_parameters_t param) {
 
 	// Time at which temperature has settled within tolerated range
 	double settle_time;
+
+
+	int t0,t1,t2,t3,delta,expfrac,j;
 
 
 
@@ -172,6 +181,45 @@ int run_simulation (simulation_parameters_t param) {
 
 				
 			}
+
+			// Experimental test burn idea
+			if (time == 0) {
+				t0 = sensor_temperature;
+			}
+			if (time < 900.0) {
+				heater_pwm_dutycycle=0.0;
+			}
+			if (time < 60.0) {
+				heater_pwm_dutycycle=1.0;
+			}
+			if (time_equals(time,60.0)) {
+fprintf (stderr,"T60\n");
+				t1 = sensor_temperature*1000;
+			}
+			if (time>=60.0 && time < 120.0) {
+				heater_pwm_dutycycle=0.0;
+			}
+			if (time_equals(time,120.0)) {
+fprintf (stderr,"T120\n");
+				t2 = sensor_temperature*1000;
+			}
+			if (time_equals(time,180.0)) {
+fprintf (stderr,"T180\n");
+				t3 = sensor_temperature*1000;
+				expfrac = ((t3-t2)*256)/(t2-t1);
+fprintf (stderr,"t3=%d, t2=%d t1=%d t0=%d expfrac=%d\n",t3,t2,t1,t0,expfrac);
+				j = 0;
+				do {
+					delta = (t3-t2) * expfrac;
+					t2 = t3;
+					t3 += delta/256;
+					j++;
+				} while (delta > 16);
+				fprintf (stderr,"estimated final temp=%d j=%d delta=%d\n", t3,j,delta);
+				// reset PID
+				integral = 0;
+			}	
+
 		}
 
 		heater_on = (fmod(time,param.heater_pwm_period) >= heater_pwm_dutycycle * param.heater_pwm_period )  ?  0 : 1;
