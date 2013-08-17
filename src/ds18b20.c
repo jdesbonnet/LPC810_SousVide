@@ -41,7 +41,7 @@ int32_t ds18b20_temperature_read () {
 	// Issue Convert command
 	ow_byte_write (0x44);
 
-	delayMicroseconds(800);
+	delayMilliseconds(800);
 
 	if ( ! ow_reset() ) {
 		return -9999;
