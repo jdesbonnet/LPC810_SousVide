@@ -536,8 +536,8 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	MyUARTPrintDecimal(LPC_USART0, t3);
 
 	// Second burn: how many more seconds do we need to bring to
-	// 4C of target?
-	uint32_t burn2_time = (( (setPointTemperature-40000) - t3) * 120000 ) / (t3-t0);
+	// 1C of target?
+	uint32_t burn2_time = (( (setPointTemperature-10000) - t3) * 120000 ) / (t3-t0);
 	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" burn2_t=");
 	MyUARTPrintDecimal(LPC_USART0, burn2_time);
 
