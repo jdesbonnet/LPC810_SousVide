@@ -44,6 +44,7 @@ int32_t readTemperature (void);
 void readOutTemperature (void);
 void heatingElementOn(void);
 void heatingElementOff(void);
+void setHeaterDutyCycle(int dutyCycle0to1024);
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -303,13 +304,18 @@ int main (void)
 	 */
 	int32_t setPointTemperature =  BASE_TEMPERATURE
 			+ 1000*nButtonPress;
-	int32_t currentTemperature;
+	int32_t currentTemperature = readTemperature();
+
+	if (setPointTemperature - currentTemperature > 10000) {
+		experimentalWarmUp(setPointTemperature);
+	}
+
 	int32_t error, prevError=0;
 	int32_t integral=0,derivative=0;
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t Kp=50, Ki=1, Kd=0;
+	int32_t Kp=50, Ki=3, Kd=10;
 	int32_t output;
 	int32_t heaterDutyCycle = 0;
 
@@ -323,9 +329,18 @@ int main (void)
 		error = setPointTemperature - currentTemperature;
 		now = timeTick;
 		dt = now - prevTime;
-		integral += (error*dt)/1000;
+
+		//if (error<0) {
+			//integral += (error*dt*5)/10000;
+		//} else {
+			integral += (error*dt)/10000;
+		//}
+
 		derivative = ((error - prevError)*10000)/dt;
-		output = Kp*error + Ki*integral + Kd*derivative;
+		output = Kp*error
+				+ (error < 0 ? Ki*integral/8 : Ki*integral)
+				+ Kd*derivative;
+
 		prevError = error;
 		prevTime = now;
 
@@ -462,7 +477,65 @@ void heatingElementOff() {
 	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 0);
 }
 
+void experimentalWarmUp (uint32_t setPointTemperature) {
+	uint32_t t0,t1,t2,t3;
+	t0 = readTemperature();
 
+	MyUARTSendStringZ(LPC_USART0,"t0=");
+	MyUARTPrintDecimal(LPC_USART0, t0);
+
+	// Test burn
+	setHeaterDutyCycle(1024);
+	delayMilliseconds(120000);
+	setHeaterDutyCycle(0);
+
+	// Some settle time
+	delayMilliseconds(120000);
+
+
+
+	t1 = readTemperature();
+	MyUARTSendStringZ(LPC_USART0," t1=");
+	MyUARTPrintDecimal(LPC_USART0, t1);
+
+	delayMilliseconds(60000);
+	t2 = readTemperature();
+	MyUARTSendStringZ(LPC_USART0," t2=");
+	MyUARTPrintDecimal(LPC_USART0, t2);
+
+	delayMilliseconds(60000);
+	t3 = readTemperature();
+	MyUARTSendStringZ(LPC_USART0," t3=");
+	MyUARTPrintDecimal(LPC_USART0, t3);
+
+	uint32_t expfrac = ((t3-t2)*256)/(t2-t1);
+	// TODO: expfrac must be <256
+	if (expfrac >= 256) {
+		MyUARTSendStringZ(LPC_USART0," ERR: not exp curve\n");
+	}
+
+	uint32_t j = 0,delta;
+	do {
+		delta = (t3-t2) * expfrac;
+		t2 = t3;
+		t3 += delta/256;
+		j++;
+	} while (delta > 16);
+	//fprintf (stderr,"estimated final temp=%d j=%d delta=%d\n", t3,j,delta);
+
+	MyUARTSendStringZ(LPC_USART0," Te1=");
+	MyUARTPrintDecimal(LPC_USART0, t3);
+
+	// Second burn: how many more seconds do we need?
+	uint32_t burn2_time = ((setPointTemperature - t3) * 120000 ) / (t3-t0);
+	MyUARTSendStringZ(LPC_USART0," burn2_t=");
+	MyUARTPrintDecimal(LPC_USART0, burn2_time);
+
+	setHeaterDutyCycle(1024);
+	delayMilliseconds(burn2_time);
+	setHeaterDutyCycle(0);
+
+}
 /**
  * Set the heating element duty cycle. Allowed values 0 - 1023.
  */
