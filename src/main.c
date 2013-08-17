@@ -308,18 +308,24 @@ int main (void)
 			+ 1000*nButtonPress;
 	int32_t currentTemperature = readTemperature();
 
-	if (setPointTemperature - currentTemperature > 10000) {
-		experimentalWarmUp(setPointTemperature);
-	}
-
 	int32_t error, prevError=0;
 	int32_t integral=0,derivative=0;
+
+
+	if (setPointTemperature - currentTemperature > 10000) {
+		experimentalWarmUp(setPointTemperature);
+		// seed integral with value likely to keep warm
+		integral = 100000; // duty cycle 100/1024
+	}
+
+
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
 	int32_t Kp=50, Ki=3, Kd=10;
 	int32_t output;
 	int32_t heaterDutyCycle = 0;
+
 
 	while (1) {
 
@@ -332,11 +338,8 @@ int main (void)
 		now = timeTick;
 		dt = now - prevTime;
 
-		//if (error<0) {
-			//integral += (error*dt*5)/10000;
-		//} else {
-			integral += (error*dt)/10000;
-		//}
+		integral += (error*dt)/10000;
+
 
 		derivative = ((error - prevError)*10000)/dt;
 		output = Kp*error
@@ -520,7 +523,7 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	uint32_t expfrac = ((t3-t2)*256)/(t2-t1);
 	// TODO: expfrac must be <256
 	if (expfrac >= 256) {
-		MyUARTSendStringZ(LPC_USART0, (uint8_t*)" ERR: not exp curve\n");
+		MyUARTSendStringZ(LPC_USART0, (uint8_t*)" ERR001\n");
 	}
 
 	uint32_t j = 0,delta;
@@ -538,7 +541,7 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	// Second burn: how many more seconds do we need to bring to
 	// 1C of target?
 	uint32_t burn2_time = (( (setPointTemperature-1000) - t3) * 120000 ) / (t3-t0);
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" burn2_t=");
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" b2_t=");
 	MyUARTPrintDecimal(LPC_USART0, burn2_time);
 
 	setHeaterDutyCycle(1024);
@@ -547,6 +550,21 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 
 	// Allow to settle
 	delayMilliseconds(300000);
+
+	int32_t t5 = readTemperature();
+
+	// Trim burn
+	uint32_t burn3_time = ((setPointTemperature - t5)
+			* (120000 + burn2_time))/ (t5 - t0);
+
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" b3_t=");
+	MyUARTPrintDecimal(LPC_USART0, burn3_time);
+
+	setHeaterDutyCycle(1024);
+	delayMilliseconds(burn3_time);
+	setHeaterDutyCycle(0);
+
+	delayMilliseconds(60000);
 
 }
 /**
