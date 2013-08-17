@@ -125,6 +125,7 @@ int run_simulation (simulation_parameters_t param) {
 
 
 	int t0,t1,t2,t3,delta,expfrac,j;
+	double burn2_time=0,burn2_time_end;
 
 
 
@@ -136,7 +137,7 @@ int run_simulation (simulation_parameters_t param) {
 
 		// Energy in from heating element
 		if (heater_on) {
-			water_temperature += heater_power * param.water_mass * dt / SHC_H2O;
+			water_temperature += heater_power * dt / ( param.water_mass * SHC_H2O);
 		}
 
 		// Energy out due to heat loss
@@ -182,29 +183,38 @@ int run_simulation (simulation_parameters_t param) {
 				
 			}
 
-			// Experimental test burn idea
+			// Experimental test burn idea. Execute one minute 
+			// burn. Measure delta K resulting from this burn 
+			// (don't wait for temperature to settle... 
+			// extrapolate from exponential rise curve).
+			// Then execute second burn to bring temperature up
+			// to within spitting distance of set point. Then
+			// start regular PID control.
 			if (time == 0) {
-				t0 = sensor_temperature;
+				t0 = sensor_temperature*1000;
 			}
-			if (time < 900.0) {
+
+			// PID does not come into effect until t=1000
+			if (time < 1000.0) {
 				heater_pwm_dutycycle=0.0;
+				integral = 0.0;
+			}
+			if (time < burn2_time_end) {
+				heater_pwm_dutycycle=1.0;
 			}
 			if (time < 60.0) {
 				heater_pwm_dutycycle=1.0;
 			}
 			if (time_equals(time,60.0)) {
-fprintf (stderr,"T60\n");
 				t1 = sensor_temperature*1000;
 			}
 			if (time>=60.0 && time < 120.0) {
 				heater_pwm_dutycycle=0.0;
 			}
 			if (time_equals(time,120.0)) {
-fprintf (stderr,"T120\n");
 				t2 = sensor_temperature*1000;
 			}
 			if (time_equals(time,180.0)) {
-fprintf (stderr,"T180\n");
 				t3 = sensor_temperature*1000;
 				expfrac = ((t3-t2)*256)/(t2-t1);
 fprintf (stderr,"t3=%d, t2=%d t1=%d t0=%d expfrac=%d\n",t3,t2,t1,t0,expfrac);
@@ -216,10 +226,16 @@ fprintf (stderr,"t3=%d, t2=%d t1=%d t0=%d expfrac=%d\n",t3,t2,t1,t0,expfrac);
 					j++;
 				} while (delta > 16);
 				fprintf (stderr,"estimated final temp=%d j=%d delta=%d\n", t3,j,delta);
-				// reset PID
-				integral = 0;
-			}	
 
+				// Second burn: how many more seconds do we need?
+				burn2_time = ((param.set_point_temperature*1000 - t3) * 60 ) / (t3-t0);
+				burn2_time_end = 180.0 + (int)burn2_time;
+fprintf (stderr,"burn2_time=%f burn2_time_end=%f\n",burn2_time,burn2_time_end);
+
+
+				// reset PID
+				//integral = 0;
+			}
 		}
 
 		heater_on = (fmod(time,param.heater_pwm_period) >= heater_pwm_dutycycle * param.heater_pwm_period )  ?  0 : 1;
