@@ -45,6 +45,7 @@ void readOutTemperature (void);
 void heatingElementOn(void);
 void heatingElementOff(void);
 void setHeaterDutyCycle(int dutyCycle0to1024);
+void experimentalWarmUp(uint32_t setPointTemperature);
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -203,14 +204,7 @@ int main (void)
 	configurePins();
 
 
-	//
-	// Initialize UART and display hello message
-	//
-#ifdef USE_UART
-	MyUARTInit(LPC_USART0, 115200);
-	LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"LPC810_SousVide_0.1.1\r\n");
-#endif
+
 
 
 
@@ -236,24 +230,32 @@ int main (void)
 	ow_init (OW_PORT,OW_PIN);
 
 
+	//
+	// Initialize UART and display hello message
+	//
+#ifdef USE_UART
+	MyUARTInit(LPC_USART0, 115200);
+	LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"LPC810_SousVide_0.1.1 ");
+
+	uint64_t rom_addr = ds18b20_rom_read();
+	rom_addr = ds18b20_rom_read();
+
+	MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
+	MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
+
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t=");
+	MyUARTPrintDecimal(LPC_USART0, readTemperature() );
+
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
+
+#endif
+
 	// Initialize delay library (to calibrate short delay loop)
 	delay_init();
 
 
-	/*
-	uint64_t rom_addr;
-	for (i = 0; i < 100; i++) {
-		rom_addr = ds18b20_rom_read();
-		MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
-		MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
-		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
 
-
-		MyUARTPrintDecimal(LPC_USART0, ds18b20_temperature_read() );
-		MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
-		blink (1,500,500);
-	}
-	*/
 
 	// Test heating element pin
 	int i;
@@ -477,11 +479,18 @@ void heatingElementOff() {
 	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 0);
 }
 
+void printDS18B20Address () {
+	uint64_t rom_addr = ds18b20_rom_read();
+	MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
+	MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
+}
+
 void experimentalWarmUp (uint32_t setPointTemperature) {
 	uint32_t t0,t1,t2,t3;
 	t0 = readTemperature();
 
-	MyUARTSendStringZ(LPC_USART0,"t0=");
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"t0=");
 	MyUARTPrintDecimal(LPC_USART0, t0);
 
 	// Test burn
@@ -495,23 +504,23 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 
 
 	t1 = readTemperature();
-	MyUARTSendStringZ(LPC_USART0," t1=");
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t1=");
 	MyUARTPrintDecimal(LPC_USART0, t1);
 
 	delayMilliseconds(60000);
 	t2 = readTemperature();
-	MyUARTSendStringZ(LPC_USART0," t2=");
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t2=");
 	MyUARTPrintDecimal(LPC_USART0, t2);
 
 	delayMilliseconds(60000);
 	t3 = readTemperature();
-	MyUARTSendStringZ(LPC_USART0," t3=");
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t3=");
 	MyUARTPrintDecimal(LPC_USART0, t3);
 
 	uint32_t expfrac = ((t3-t2)*256)/(t2-t1);
 	// TODO: expfrac must be <256
 	if (expfrac >= 256) {
-		MyUARTSendStringZ(LPC_USART0," ERR: not exp curve\n");
+		MyUARTSendStringZ(LPC_USART0, (uint8_t*)" ERR: not exp curve\n");
 	}
 
 	uint32_t j = 0,delta;
@@ -523,17 +532,21 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	} while (delta > 16);
 	//fprintf (stderr,"estimated final temp=%d j=%d delta=%d\n", t3,j,delta);
 
-	MyUARTSendStringZ(LPC_USART0," Te1=");
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" Te1=");
 	MyUARTPrintDecimal(LPC_USART0, t3);
 
-	// Second burn: how many more seconds do we need?
-	uint32_t burn2_time = ((setPointTemperature - t3) * 120000 ) / (t3-t0);
-	MyUARTSendStringZ(LPC_USART0," burn2_t=");
+	// Second burn: how many more seconds do we need to bring to
+	// 4C of target?
+	uint32_t burn2_time = (( (setPointTemperature-40000) - t3) * 120000 ) / (t3-t0);
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" burn2_t=");
 	MyUARTPrintDecimal(LPC_USART0, burn2_time);
 
 	setHeaterDutyCycle(1024);
 	delayMilliseconds(burn2_time);
 	setHeaterDutyCycle(0);
+
+	// Allow to settle
+	delayMilliseconds(300000);
 
 }
 /**
