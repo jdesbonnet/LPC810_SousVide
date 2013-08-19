@@ -309,20 +309,20 @@ int main (void)
 	int32_t currentTemperature = readTemperature();
 
 	int32_t error, prevError=0;
-	int32_t integral=0,derivative=0;
+	int32_t integral=20000,derivative=0;
 
 
 	if (setPointTemperature - currentTemperature > 10000) {
 		experimentalWarmUp(setPointTemperature);
 		// seed integral with value likely to keep warm
-		integral = 100000; // duty cycle 100/1024
+		//integral = 20000; // duty cycle 100/1024
 	}
 
 
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t Kp=50, Ki=3, Kd=10;
+	int32_t Kp=10, Ki=3, Kd=40;
 	int32_t output;
 	int32_t heaterDutyCycle = 0;
 
@@ -342,8 +342,14 @@ int main (void)
 
 
 		derivative = ((error - prevError)*10000)/dt;
+
+		/*
 		output = Kp*error
 				+ (error < 0 ? Ki*integral/8 : Ki*integral)
+				+ Kd*derivative;
+		*/
+		output = Kp*error
+				+ Ki*integral
 				+ Kd*derivative;
 
 		prevError = error;
@@ -366,7 +372,7 @@ int main (void)
 
 		MyUARTSendByte (LPC_USART0, SEP);
 		MyUARTSendByte (LPC_USART0, SEP);
-		MyUARTSendByte (LPC_USART0, SEP);
+		//MyUARTSendByte (LPC_USART0, SEP);
 
 		MyUARTPrintDecimal(LPC_USART0, Kp*error );
 
