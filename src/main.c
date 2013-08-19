@@ -46,6 +46,7 @@ void heatingElementOn(void);
 void heatingElementOff(void);
 void setHeaterDutyCycle(int dutyCycle0to1024);
 void experimentalWarmUp(uint32_t setPointTemperature);
+void sep(void);
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -365,31 +366,28 @@ int main (void)
 
 		// Log temperature to serial port
 		MyUARTPrintDecimal(LPC_USART0, timeTick );
-		MyUARTSendByte (LPC_USART0, SEP);
+		sep();
 		MyUARTPrintDecimal(LPC_USART0, currentTemperature );
-		MyUARTSendByte (LPC_USART0, SEP);
+		sep();
 		MyUARTPrintDecimal(LPC_USART0, setPointTemperature );
 
-		MyUARTSendByte (LPC_USART0, SEP);
-		MyUARTSendByte (LPC_USART0, SEP);
-		//MyUARTSendByte (LPC_USART0, SEP);
+		sep();
 
 		MyUARTPrintDecimal(LPC_USART0, Kp*error );
 
-		MyUARTSendByte (LPC_USART0, SEP);
+		sep();
 		MyUARTPrintDecimal(LPC_USART0, Ki*integral );
 
-		MyUARTSendByte (LPC_USART0, SEP);
+		sep();
 		MyUARTPrintDecimal(LPC_USART0, Kd*derivative );
 
-		MyUARTSendByte (LPC_USART0, SEP);
+		sep();
 		MyUARTPrintDecimal(LPC_USART0, output );
 
-		MyUARTSendByte (LPC_USART0, SEP);
+		sep();
 		MyUARTPrintDecimal(LPC_USART0, heaterDutyCycle );
 
-		MyUARTSendByte (LPC_USART0, '\r');
-		MyUARTSendByte (LPC_USART0, '\n');
+		MyUARTSendStringZ (LPC_USART0,"\r\n");
 
 #ifdef BANG_BANG
 		// Slow blink if under temperature
@@ -582,6 +580,10 @@ void setHeaterDutyCycle (int dutyCycle) {
 		return;
 	}
 	heaterDutyCycle = (dutyCycle * HEATER_PWM_PERIOD) / 1024;
+}
+
+void sep(void) {
+	MyUARTSendByte (LPC_USART0, SEP);
 }
 
 /**
