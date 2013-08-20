@@ -242,7 +242,7 @@ int main (void)
 	//
 #ifdef USE_UART
 	MyUARTInit(LPC_USART0, 115200);
-	LPC_USART0->INTENSET = 0x01;	/* Enable UART interrupt */
+	LPC_USART0->INTENSET = (1<<2) | (1<<0);	/* Enable UART interrupt */
 	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"LPC810_SousVide_0.1.1 ");
 
 	uint64_t rom_addr = ds18b20_rom_read();
@@ -250,11 +250,8 @@ int main (void)
 
 	MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
 	MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
-
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t=");
-	MyUARTPrintDecimal(LPC_USART0, readTemperature() );
-
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
+	debug ("t",readTemperature());
+	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
 
 #endif
 
@@ -305,8 +302,6 @@ int main (void)
 
 	if (setPointTemperature - currentTemperature > 10000) {
 		experimentalWarmUp(setPointTemperature);
-		// seed integral with value likely to keep warm
-		//integral = 20000; // duty cycle 100/1024
 	}
 
 
@@ -349,8 +344,6 @@ int main (void)
 
 		heaterDutyCycle = output/1000;
 		setHeaterDutyCycle(heaterDutyCycle);
-
-		//heater_status  = ((int32_t)(timeTick % 10000) > output) ? 0 : 1;
 
 
 		// Log temperature to serial port
@@ -396,13 +389,6 @@ int main (void)
 		}
 #endif
 
-		/*
-		if ( heater_status ) {
-			heatingElementOn();
-		} else {
-			heatingElementOff();
-		}
-		*/
 		blink (1,500,500);
 
 		delayMilliseconds(10000);
@@ -415,8 +401,6 @@ int main (void)
 			delayMilliseconds(5000);
 			interruptFlags = 0;
 		}
-
-
 	}
 
 }
@@ -652,6 +636,14 @@ void UART0_IRQHandler(void)
 		case 'C':
 			integral = 0;
 			break;
+		case 'H':
+			setHeaterDutyCycle(1024);
+			break;
+		case 'c':
+			integral += 100;
+			break;
+		case '*':
+			LPC_USART0->TXDATA = '^';
 		}
 	} else if (uart_status & UART_STAT_TXRDY ){
 
