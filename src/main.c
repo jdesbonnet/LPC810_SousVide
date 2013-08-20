@@ -47,6 +47,8 @@ void heatingElementOff(void);
 void setHeaterDutyCycle(int dutyCycle0to1024);
 void experimentalWarmUp(uint32_t setPointTemperature);
 void sep(void);
+void debug(char *key, int32_t value);
+
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
 
@@ -94,6 +96,10 @@ volatile uint32_t heaterDutyCycle = 0;
 
 /** Set to 1 if element is on, 0 if off */
 volatile uint32_t heaterStatus = 0;
+
+volatile int32_t Kp=10, Ki=3, Kd=40;
+volatile int32_t integral=20000;
+
 
 void configurePins()
 {
@@ -255,21 +261,6 @@ int main (void)
 	// Initialize delay library (to calibrate short delay loop)
 	delay_init();
 
-
-
-
-	// Test heating element pin
-	int i;
-	/*
-	for (i = 0; i < 100; i++) {
-		heatingElementOn();
-		delayMilliseconds(100);
-		heatingElementOff();
-		delayMilliseconds(100);
-	}
-	*/
-
-
 	/*
 	 * Get temperature set-point. This is set by pressing SW1 once for each degree C
 	 * above 54°C. Ie one press (the minimum) is 55°C. A pause of more than 5 seconds
@@ -310,7 +301,6 @@ int main (void)
 	int32_t currentTemperature = readTemperature();
 
 	int32_t error, prevError=0;
-	int32_t integral=20000,derivative=0;
 
 
 	if (setPointTemperature - currentTemperature > 10000) {
@@ -323,10 +313,9 @@ int main (void)
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t Kp=10, Ki=3, Kd=40;
 	int32_t output;
 	int32_t heaterDutyCycle = 0;
-
+	int32_t derivative=0;
 
 	while (1) {
 
@@ -497,8 +486,7 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	uint32_t t0,t1,t2,t3;
 	t0 = readTemperature();
 
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"t0=");
-	MyUARTPrintDecimal(LPC_USART0, t0);
+	debug ("t0",t0);
 
 	// Test burn
 	setHeaterDutyCycle(1024);
@@ -511,23 +499,22 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 
 
 	t1 = readTemperature();
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t1=");
-	MyUARTPrintDecimal(LPC_USART0, t1);
+	debug ("t1",t1);
+
 
 	delayMilliseconds(60000);
 	t2 = readTemperature();
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t2=");
-	MyUARTPrintDecimal(LPC_USART0, t2);
+
+	debug ("t2",t2);
 
 	delayMilliseconds(60000);
 	t3 = readTemperature();
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" t3=");
-	MyUARTPrintDecimal(LPC_USART0, t3);
+	debug ("t3",t3);
 
 	uint32_t expfrac = ((t3-t2)*256)/(t2-t1);
 	// TODO: expfrac must be <256
 	if (expfrac >= 256) {
-		MyUARTSendStringZ(LPC_USART0, (uint8_t*)" ERR001\n");
+		debug ("ERR",1);
 	}
 
 	uint32_t j = 0,delta;
@@ -539,14 +526,14 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	} while (delta > 16);
 	//fprintf (stderr,"estimated final temp=%d j=%d delta=%d\n", t3,j,delta);
 
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" Te1=");
-	MyUARTPrintDecimal(LPC_USART0, t3);
+
+	debug ("Te1=",t3);
 
 	// Second burn: how many more seconds do we need to bring to
 	// 1C of target?
 	uint32_t burn2_time = (( (setPointTemperature-1000) - t3) * 120000 ) / (t3-t0);
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" b2_t=");
-	MyUARTPrintDecimal(LPC_USART0, burn2_time);
+
+	debug ("b2_t",burn2_time);
 
 	setHeaterDutyCycle(1024);
 	delayMilliseconds(burn2_time);
@@ -561,8 +548,7 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	uint32_t burn3_time = ((setPointTemperature - t5)
 			* (120000 + burn2_time))/ (t5 - t0);
 
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)" b3_t=");
-	MyUARTPrintDecimal(LPC_USART0, burn3_time);
+	debug ("b3_t",burn3_time);
 
 	setHeaterDutyCycle(1024);
 	delayMilliseconds(burn3_time);
@@ -582,12 +568,24 @@ void setHeaterDutyCycle (int dutyCycle) {
 	heaterDutyCycle = (dutyCycle * HEATER_PWM_PERIOD) / 1024;
 }
 
+/**
+ * Print separator character. Moving this to a separate
+ * function saved ~ 4 bytes per call (presumably because
+ * there are no params).
+ */
 void sep(void) {
 	MyUARTSendByte (LPC_USART0, SEP);
 }
 
+void debug(char *key, int32_t value) {
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"DEBUG: ");
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)key);
+	MyUARTPrintDecimal(LPC_USART0, value);
+	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"\r\n");
+}
 /**
- * SysTick interrupt happens every 10 ms
+ * SysTick interrupt happens every 10 ms. Update timeTick
+ * global and implement heating element PWM.
  **/
 void SysTick_Handler(void) {
 	timeTick++;
@@ -601,7 +599,7 @@ void SysTick_Handler(void) {
 }
 
 /**
- * Pin interrupt handler
+ * Pin interrupt handler. Used to handle UI button.
  */
 void PININT1_IRQHandler(void) {
 
@@ -617,4 +615,48 @@ void PININT1_IRQHandler(void) {
 	// Clear the interrupt
 	LPC_PIN_INT->IST = (1<<CHANNEL);
 	return;
+}
+
+void UART0_IRQHandler(void)
+{
+	uint32_t rx;
+	uint32_t uart_status = LPC_USART0->STAT;
+
+	// UM10601 §15.6.3, Table 162, p181. USART Status Register.
+	// Bit 0 RXRDY: 1 = data is available to be read from RXDATA
+	// Bit 2 TXRDY: 1 = data may be written to TXDATA
+	if (uart_status & UART_STAT_RXRDY ) {
+
+		// handle incoming byte
+		rx = LPC_USART0->RXDATA;
+
+		switch (rx) {
+		case 'P':
+			Kp++;
+			break;
+		case 'I':
+			Ki++;
+			break;
+		case 'D':
+			Kd++;
+			break;
+		case 'p':
+			Kp--;
+			break;
+		case 'i':
+			Ki--;
+			break;
+		case 'd':
+			Kd--;
+			break;
+		case 'C':
+			integral = 0;
+			break;
+		}
+	} else if (uart_status & UART_STAT_TXRDY ){
+
+		LPC_USART0->INTENCLR = 0x04;
+	}
+
+  return;
 }
