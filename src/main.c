@@ -211,11 +211,6 @@ int main (void)
 	configurePins();
 
 
-
-
-
-
-
 	//
 	// Configure SW1 pin to trigger interrupt when pressed.
 	//
@@ -242,17 +237,17 @@ int main (void)
 	//
 #ifdef USE_UART
 	MyUARTInit(LPC_USART0, 115200);
-	LPC_USART0->INTENSET = (1<<2) | (1<<0);	/* Enable UART interrupt */
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"LPC810_SousVide_0.1.1 ");
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"LPC810_SousVide_0.2.0\r\nDS18B20 address: ");
 
 	uint64_t rom_addr = ds18b20_rom_read();
 	rom_addr = ds18b20_rom_read();
 
 	MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
 	MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
-	debug ("t",readTemperature());
-	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
+	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
 
+	debug ("T_start",readTemperature());
+	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
 #endif
 
 	// Initialize delay library (to calibrate short delay loop)
@@ -295,6 +290,9 @@ int main (void)
 	 */
 	int32_t setPointTemperature =  BASE_TEMPERATURE
 			+ 1000*nButtonPress;
+
+	debug ("T_set",setPointTemperature);
+
 	int32_t currentTemperature = readTemperature();
 
 	int32_t error, prevError=0;
@@ -470,7 +468,7 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	uint32_t t0,t1,t2,t3;
 	t0 = readTemperature();
 
-	debug ("t0",t0);
+	debug ("T0",t0);
 
 	// Test burn
 	setHeaterDutyCycle(1024);
@@ -483,17 +481,17 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 
 
 	t1 = readTemperature();
-	debug ("t1",t1);
+	debug ("T1",t1);
 
 
 	delayMilliseconds(60000);
 	t2 = readTemperature();
 
-	debug ("t2",t2);
+	debug ("T2",t2);
 
 	delayMilliseconds(60000);
 	t3 = readTemperature();
-	debug ("t3",t3);
+	debug ("T3",t3);
 
 	uint32_t expfrac = ((t3-t2)*256)/(t2-t1);
 	// TODO: expfrac must be <256
@@ -561,9 +559,14 @@ void sep(void) {
 	MyUARTSendByte (LPC_USART0, SEP);
 }
 
+/**
+ * Send debug message to UART.
+ */
 void debug(char *key, int32_t value) {
 	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"DEBUG: ");
 	MyUARTSendStringZ(LPC_USART0, (uint8_t*)key);
+	MyUARTSendByte(LPC_USART0, '=');
+	//MyUARTSendStringZ(LPC_USART0, "=");
 	MyUARTPrintDecimal(LPC_USART0, value);
 	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"\r\n");
 }
@@ -601,10 +604,13 @@ void PININT1_IRQHandler(void) {
 	return;
 }
 
+#if 0
 void UART0_IRQHandler(void)
 {
 	uint32_t rx;
 	uint32_t uart_status = LPC_USART0->STAT;
+
+	LPC_USART0->TXDATA = '^';
 
 	// UM10601 §15.6.3, Table 162, p181. USART Status Register.
 	// Bit 0 RXRDY: 1 = data is available to be read from RXDATA
@@ -642,8 +648,8 @@ void UART0_IRQHandler(void)
 		case 'c':
 			integral += 100;
 			break;
-		case '*':
-			LPC_USART0->TXDATA = '^';
+		//case '*':
+			//LPC_USART0->TXDATA = '^';
 		}
 	} else if (uart_status & UART_STAT_TXRDY ){
 
@@ -652,3 +658,4 @@ void UART0_IRQHandler(void)
 
   return;
 }
+#endif
