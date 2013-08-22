@@ -62,8 +62,12 @@ void MyUARTInit(LPC_USART_TypeDef *UARTx, uint32_t baudrate)
 
 	UARTx->STAT = CTS_DELTA | DELTA_RXBRK;		/* Clear all status bits. */
   /* Enable the UART Interrupt. */
+
+
+
 	if (UARTx == LPC_USART0) {
 		NVIC_EnableIRQ(UART0_IRQn);
+		LPC_USART0->TXDATA='*';
 	} else if (UARTx == LPC_USART1) {
 		NVIC_EnableIRQ(UART1_IRQn);
 	} else if (UARTx == LPC_USART2) {
@@ -71,6 +75,10 @@ void MyUARTInit(LPC_USART_TypeDef *UARTx, uint32_t baudrate)
 	}
 	UARTx->INTENSET = RXRDY | TXRDY | DELTA_RXBRK;	/* Enable UART interrupt */
 	UARTx->CFG |= UART_EN;
+
+NVIC_EnableIRQ(UART0_IRQn);
+LPC_USART0->TXDATA='*';
+
 	return;
 }
 
@@ -92,6 +100,10 @@ void MyUARTSendString (LPC_USART_TypeDef *UARTx, uint8_t *buf, uint32_t len) {
 		MyUARTSendByte(UARTx, buf[i]);
 	}
 }
+
+/**
+ * Send zero terminated string.
+ */
 void MyUARTSendStringZ (LPC_USART_TypeDef *UARTx, uint8_t *buf) {
 	while (*buf != 0) {
 		MyUARTSendByte(UARTx, *buf);
@@ -99,23 +111,26 @@ void MyUARTSendStringZ (LPC_USART_TypeDef *UARTx, uint8_t *buf) {
 	}
 }
 
-
 void UART0_IRQHandler(void)
 {
 
 	uint32_t uart_status = LPC_USART0->STAT;
+
+	LPC_USART0->TXDATA = '$';
 
 	// UM10601 §15.6.3, Table 162, p181. USART Status Register.
 	// Bit 0 RXRDY: 1 = data is available to be read from RXDATA
 	// Bit 2 TXRDY: 1 = data may be written to TXDATA
 	if (uart_status & UART_STAT_RXRDY ) {
 
-		uart_rxbuf[uart_rxi] = LPC_USART0->RXDATA;
+		LPC_USART0->TXDATA='*';
+		//uart_rxbuf[uart_rxi] = LPC_USART0->RXDATA;
 
 		// echo
-		MyUARTSendByte(LPC_USART0,uart_rxbuf[uart_rxi]);
+		//MyUARTSendByte(LPC_USART0,uart_rxbuf[uart_rxi]);
 
 		// If CR flag EOL
+#if 0
 		if (uart_rxbuf[uart_rxi]=='\r') {
 			uart_buf_flags |= UART_BUF_FLAG_EOL;
 			uart_rxbuf[uart_rxi]=0;
@@ -125,6 +140,7 @@ void UART0_IRQHandler(void)
 				MyUARTBufReset();
 			}
 		}
+#endif
 
 	} else if (uart_status & UART_STAT_TXRDY ){
 
@@ -133,6 +149,7 @@ void UART0_IRQHandler(void)
 
   return;
 }
+
 
 uint8_t* MyUARTGetBuf(void) {
 	return (uint8_t*)uart_rxbuf;
