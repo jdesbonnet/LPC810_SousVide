@@ -24,27 +24,17 @@
 
 #define UART_BUF_FLAG_EOL (0x01<<0)
 
-void MyUARTInit(LPC_USART_TypeDef *UARTx, uint32_t baudrate);
-void MyUARTSendByte(LPC_USART_TypeDef *UARTx, uint8_t v);
-void MyUARTSendString(LPC_USART_TypeDef *UARTx, uint8_t *buf, uint32_t len);
-void MyUARTSendStringZ(LPC_USART_TypeDef *UARTx, uint8_t *buf);
-void MyUARTSendDrain(LPC_USART_TypeDef *UARTx);
-
-// Not sure if external users of buffer need the 'volatile' qualifier
-uint8_t* MyUARTGetBuf(void);
-uint32_t MyUARTGetBufIndex(void);
-
-uint32_t MyUARTGetBufFlags(void);
-
-void MyUARTBufReset(void);
-uint32_t MyUARTBufCopy(uint8_t *buf);
-
-void MyUARTPrintDecimal(LPC_USART_TypeDef *UARTx, int32_t i);
+void MyUARTInit(uint32_t baudrate);
+void MyUARTSendByte(uint8_t v);
+void MyUARTSendString(uint8_t *buf, uint32_t len);
+void MyUARTSendStringZ(char *buf);
+void MyUARTSendDrain();
+void MyUARTPrintDecimal(int32_t i);
 
 
-int isDigit(uint8_t v);
-int parse_dec(uint8_t *buf, uint8_t **end);
-void print_dec(uint8_t *buf, uint32_t v);
-void execute_cmd(uint8_t *buf);
+//int isDigit(uint8_t v);
+//int parse_dec(uint8_t *buf, uint8_t **end);
+//void print_dec(uint8_t *buf, uint32_t v);
+//void execute_cmd(uint8_t *buf);
 
 #endif /* MYUART_H_ */

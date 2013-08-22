@@ -236,15 +236,15 @@ int main (void)
 	// Initialize UART and display hello message
 	//
 #ifdef USE_UART
-	MyUARTInit(LPC_USART0, 115200);
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"LPC810_SousVide_0.2.0\r\nDS18B20 address: ");
+	MyUARTInit(115200);
+	MyUARTSendStringZ ((uint8_t*)"LPC810_SousVide_0.2.0\r\nDS18B20 address: ");
 
 	uint64_t rom_addr = ds18b20_rom_read();
 	rom_addr = ds18b20_rom_read();
 
-	MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
-	MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
+	MyUARTPrintHex(rom_addr >> 32 );
+	MyUARTPrintHex((uint32_t)(rom_addr & 0x00000000ffffffff ));
+	MyUARTSendStringZ ((uint8_t*)"\r\n");
 
 	debug ("T_start",readTemperature());
 	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
@@ -310,6 +310,8 @@ int main (void)
 	int32_t heaterDutyCycle = 0;
 	int32_t derivative=0;
 
+	int32_t array[8];
+
 	while (1) {
 
 		// Read temperature in 0.001°C units. Eg 45200 = 45.2°C.
@@ -343,31 +345,16 @@ int main (void)
 		heaterDutyCycle = output/1000;
 		setHeaterDutyCycle(heaterDutyCycle);
 
+		array[0] = timeTick;
+		array[1] = currentTemperature;
+		array[2] = setPointTemperature;
+		array[3] =  Kp*error;
+		array[4] =  Ki*integral;
+		array[5] =  Kp*error;
+		array[6] = output;
+		array[7] = heaterDutyCycle;
 
-		// Log temperature to serial port
-		MyUARTPrintDecimal(LPC_USART0, timeTick );
-		sep();
-		MyUARTPrintDecimal(LPC_USART0, currentTemperature );
-		sep();
-		MyUARTPrintDecimal(LPC_USART0, setPointTemperature );
-
-		sep();
-
-		MyUARTPrintDecimal(LPC_USART0, Kp*error );
-
-		sep();
-		MyUARTPrintDecimal(LPC_USART0, Ki*integral );
-
-		sep();
-		MyUARTPrintDecimal(LPC_USART0, Kd*derivative );
-
-		sep();
-		MyUARTPrintDecimal(LPC_USART0, output );
-
-		sep();
-		MyUARTPrintDecimal(LPC_USART0, heaterDutyCycle );
-
-		MyUARTSendStringZ (LPC_USART0,"\r\n");
+		print_record(array);
 
 #ifdef BANG_BANG
 		// Slow blink if under temperature
@@ -459,9 +446,9 @@ void heatingElementOff() {
 
 void printDS18B20Address () {
 	uint64_t rom_addr = ds18b20_rom_read();
-	MyUARTPrintHex(LPC_USART0, rom_addr >> 32 );
-	MyUARTPrintHex(LPC_USART0, (uint32_t)(rom_addr & 0x00000000ffffffff ));
-	MyUARTSendStringZ (LPC_USART0, (uint8_t*)"<\r\n");
+	MyUARTPrintHex(rom_addr >> 32 );
+	MyUARTPrintHex((uint32_t)(rom_addr & 0x00000000ffffffff ));
+	MyUARTSendStringZ ((uint8_t*)"<\r\n");
 }
 
 void experimentalWarmUp (uint32_t setPointTemperature) {
@@ -556,19 +543,29 @@ void setHeaterDutyCycle (int dutyCycle) {
  * there are no params).
  */
 void sep(void) {
-	MyUARTSendByte (LPC_USART0, SEP);
+	MyUARTSendByte (SEP);
 }
 
 /**
  * Send debug message to UART.
  */
 void debug(char *key, int32_t value) {
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"DEBUG: ");
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)key);
-	MyUARTSendByte(LPC_USART0, '=');
-	//MyUARTSendStringZ(LPC_USART0, "=");
-	MyUARTPrintDecimal(LPC_USART0, value);
-	MyUARTSendStringZ(LPC_USART0, (uint8_t*)"\r\n");
+	MyUARTSendStringZ((uint8_t*)"DEBUG: ");
+	MyUARTSendStringZ((uint8_t*)key);
+	MyUARTSendByte('=');
+	MyUARTPrintDecimal(value);
+	MyUARTSendStringZ((uint8_t*)"\r\n");
+}
+
+void print_record(int32_t array[], int len) {
+	MyUARTSendStringZ("DATA:");
+	int i;
+
+	for (i = 0; i < len; i++) {
+		sep();
+		MyUARTPrintDecimal(array[i]);
+	}
+	MyUARTSendStringZ("\r\n");
 }
 /**
  * SysTick interrupt happens every 10 ms. Update timeTick
