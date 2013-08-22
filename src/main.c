@@ -387,7 +387,7 @@ int main (void)
 		}
 #endif
 
-		blink (1,500,500);
+		//blink (1,500,500);
 
 		delayMilliseconds(10000);
 
