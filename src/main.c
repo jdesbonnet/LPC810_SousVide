@@ -47,7 +47,9 @@ void heatingElementOff(void);
 void setHeaterDutyCycle(int dutyCycle0to1024);
 void experimentalWarmUp(uint32_t setPointTemperature);
 void sep(void);
+void crlf(void);
 void debug(char *key, int32_t value);
+void print_record(int32_t array[], int len);
 
 
 #define SYSTICK_DELAY		(SystemCoreClock/100)
@@ -237,14 +239,14 @@ int main (void)
 	//
 #ifdef USE_UART
 	MyUARTInit(115200);
-	MyUARTSendStringZ ((uint8_t*)"LPC810_SousVide_0.2.0\r\nDS18B20 address: ");
+	MyUARTSendStringZ ("LPC810_SousVide_0.2.0\r\nDS18B20 address: ");
 
 	uint64_t rom_addr = ds18b20_rom_read();
 	rom_addr = ds18b20_rom_read();
 
-	MyUARTPrintHex(rom_addr >> 32 );
+	MyUARTPrintHex((uint32_t)(rom_addr >> 32) );
 	MyUARTPrintHex((uint32_t)(rom_addr & 0x00000000ffffffff ));
-	MyUARTSendStringZ ((uint8_t*)"\r\n");
+	MyUARTSendStringZ ("\r\n");
 
 	debug ("T_start",readTemperature());
 	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
@@ -268,15 +270,23 @@ int main (void)
 
 		// Was interrupt due to SW1?
 		if (interruptFlags & 0x01) {
+			// This blink as well as confirming button press
+			// should also act as a debounce.
 			blink(1,250,0);
 			nButtonPress++;
 			interruptFlags = 0;
+			debug ("nButtonPress",nButtonPress);
 		}
 
 	}
 
 	// Echo back the number of button press to the user
 	blink (nButtonPress,500,500);
+
+	int32_t setPointTemperature =  BASE_TEMPERATURE
+			+ 1000*nButtonPress;
+
+	debug ("T_set",setPointTemperature);
 
 	// Delay for 5s before entering control mode to avoid confusion
 	// with flashing LEDs.
@@ -288,10 +298,7 @@ int main (void)
 	 * mode can only be exited by reset/power cycle. At any time the user can press
 	 * the UI button and the temperature will be readout by blinking the LED.
 	 */
-	int32_t setPointTemperature =  BASE_TEMPERATURE
-			+ 1000*nButtonPress;
 
-	debug ("T_set",setPointTemperature);
 
 	int32_t currentTemperature = readTemperature();
 
@@ -354,7 +361,7 @@ int main (void)
 		array[6] = output;
 		array[7] = heaterDutyCycle;
 
-		print_record(array);
+		print_record(array,8);
 
 #ifdef BANG_BANG
 		// Slow blink if under temperature
@@ -448,7 +455,7 @@ void printDS18B20Address () {
 	uint64_t rom_addr = ds18b20_rom_read();
 	MyUARTPrintHex(rom_addr >> 32 );
 	MyUARTPrintHex((uint32_t)(rom_addr & 0x00000000ffffffff ));
-	MyUARTSendStringZ ((uint8_t*)"<\r\n");
+	MyUARTSendStringZ ("<\r\n");
 }
 
 void experimentalWarmUp (uint32_t setPointTemperature) {
@@ -546,15 +553,18 @@ void sep(void) {
 	MyUARTSendByte (SEP);
 }
 
+void crlf(void) {
+	MyUARTSendStringZ ("\r\n");
+}
 /**
  * Send debug message to UART.
  */
 void debug(char *key, int32_t value) {
-	MyUARTSendStringZ((uint8_t*)"DEBUG: ");
-	MyUARTSendStringZ((uint8_t*)key);
+	MyUARTSendStringZ("DEBUG: ");
+	MyUARTSendStringZ(key);
 	MyUARTSendByte('=');
 	MyUARTPrintDecimal(value);
-	MyUARTSendStringZ((uint8_t*)"\r\n");
+	MyUARTSendStringZ("\r\n");
 }
 
 void print_record(int32_t array[], int len) {
