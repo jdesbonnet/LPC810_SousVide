@@ -46,9 +46,11 @@ void heatingElementOn(void);
 void heatingElementOff(void);
 void setHeaterDutyCycle(int dutyCycle0to1024);
 void experimentalWarmUp(uint32_t setPointTemperature);
+void setOneShotHeating (int time_ms);
 void sep(void);
 void crlf(void);
 void debug(char *key, int32_t value);
+void printDataRecord (void);
 void print_record(int32_t array[], int len);
 
 
@@ -96,12 +98,29 @@ volatile uint32_t swDownTime=0;
 
 volatile uint32_t heaterDutyCycle = 0;
 
-/** Set to 1 if element is on, 0 if off */
+/** Heating element status bits.
+ * Bit 0: Set to 1 if element is on, 0 if off
+ * Bit 1: Set to 1 if one-shot mode is selected.
+ **/
 volatile uint32_t heaterStatus = 0;
+/**
+ * If in one-shot mode, this will be the SysTick end time.
+ */
+volatile uint32_t oneShotEnd=0;
 
-volatile int32_t Kp=10, Ki=3, Kd=40;
-volatile int32_t integral=20000;
+// These PID parameters are marked volatile because I hope
+// to implement simple key commands (in UART IRQ) to
+// manipulate those values.
+int32_t Kp=10, Ki=3, Kd=40;
+int32_t integral=20000;
+int32_t derivative=0;
 
+// These are global so that I can output temperature log
+// records while doing test heating.
+int32_t currentTemperature;
+int32_t setPointTemperature;
+int32_t output=0;
+int32_t error=0;
 
 void configurePins()
 {
@@ -192,7 +211,6 @@ int main (void)
 	SysTick_Config( SYSTICK_DELAY );
 
 
-
 	//
 	// Enable and configure GPIO
 	//
@@ -239,17 +257,14 @@ int main (void)
 	//
 #ifdef USE_UART
 	MyUARTInit(115200);
-	MyUARTSendStringZ ("LPC810_SousVide_0.2.0\r\nDS18B20 address: ");
+	MyUARTSendStringZ ("LPC810_SousVide_0.2.0\r\nDS18B20: ");
 
 	uint64_t rom_addr = ds18b20_rom_read();
-	rom_addr = ds18b20_rom_read();
-
 	MyUARTPrintHex((uint32_t)(rom_addr >> 32) );
 	MyUARTPrintHex((uint32_t)(rom_addr & 0x00000000ffffffff ));
-	crlf(); //MyUARTSendStringZ ("\r\n");
+	crlf();
 
 	debug ("T_start",readTemperature());
-	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
 #endif
 
 	// Initialize delay library (to calibrate short delay loop)
@@ -275,7 +290,7 @@ int main (void)
 			blink(1,250,0);
 			nButtonPress++;
 			interruptFlags = 0;
-			debug ("nButtonPress",nButtonPress);
+			//debug ("nButtonPress",nButtonPress);
 		}
 
 	}
@@ -283,7 +298,7 @@ int main (void)
 	// Echo back the number of button press to the user
 	blink (nButtonPress,500,500);
 
-	int32_t setPointTemperature =  BASE_TEMPERATURE
+	setPointTemperature =  BASE_TEMPERATURE
 			+ 1000*nButtonPress;
 
 	debug ("T_set",setPointTemperature);
@@ -300,25 +315,21 @@ int main (void)
 	 */
 
 
-	int32_t currentTemperature = readTemperature();
+	currentTemperature = readTemperature();
 
-	int32_t error, prevError=0;
-
-
+	// If delta Temperature > 10C exec warmup procedure
 	if (setPointTemperature - currentTemperature > 10000) {
 		experimentalWarmUp(setPointTemperature);
 	}
 
-
+	int32_t prevError= setPointTemperature - currentTemperature;
 	int32_t dt;
 	uint32_t prevTime = timeTick;
 	uint32_t now;
-	int32_t output;
-	int32_t heaterDutyCycle = 0;
-	int32_t derivative=0;
 
-	int32_t array[8];
-
+	//
+	// PID control loop. Using fixed point math.
+	//
 	while (1) {
 
 		// Read temperature in 0.001°C units. Eg 45200 = 45.2°C.
@@ -330,19 +341,16 @@ int main (void)
 		now = timeTick;
 		dt = now - prevTime;
 
+		// Fixed point scaling factor of 1e-2 (and 1e2 for dt)
 		integral += (error*dt)/10000;
 
-
+		// Fixed point scaling
 		derivative = ((error - prevError)*10000)/dt;
 
-		/*
-		output = Kp*error
-				+ (error < 0 ? Ki*integral/8 : Ki*integral)
-				+ Kd*derivative;
-		*/
 		output = Kp*error
 				+ Ki*integral
 				+ Kd*derivative;
+
 
 		prevError = error;
 		prevTime = now;
@@ -352,40 +360,14 @@ int main (void)
 		heaterDutyCycle = output/1000;
 		setHeaterDutyCycle(heaterDutyCycle);
 
-		array[0] = timeTick;
-		array[1] = currentTemperature;
-		array[2] = setPointTemperature;
-		array[3] =  Kp*error;
-		array[4] =  Ki*integral;
-		array[5] =  Kp*error;
-		array[6] = output;
-		array[7] = heaterDutyCycle;
-
-		print_record(array,8);
-
-#ifdef BANG_BANG
-		// Slow blink if under temperature
-		if (currentTemperature < (setPointTemperature-500) ) {
-			heatingElementOn();
-			blink (1, 2000, 2000);
-		}
-		// Fast blink if over temperature
-		else if (currentTemperature > (setPointTemperature+500) ) {
-			heatingElementOff();
-			blink (1, 250, 250);
-		}
-		// Solid on if at setpoint (blink with 0 off time)
-		else {
-			heatingElementOff();
-			blink (1, 500, 0);
-		}
-#endif
+		printDataRecord();
 
 		//blink (1,500,500);
 
 		delayMilliseconds(10000);
 
 		// Did we receive a button press?
+#if 0
 		if (interruptFlags & 0x01) {
 			// Read out temperature
 			delayMilliseconds(5000);
@@ -393,8 +375,34 @@ int main (void)
 			delayMilliseconds(5000);
 			interruptFlags = 0;
 		}
+#endif
+
 	}
 
+}
+
+void printDataRecord () {
+	int32_t array[8];
+	currentTemperature = readTemperature();
+	array[0] = timeTick;
+	array[1] = currentTemperature;
+	array[2] = setPointTemperature;
+	array[3] = Kp*error;
+	array[4] = Ki*integral;
+	array[5] = Kd*derivative;
+	array[6] = output;
+	array[7] = heaterDutyCycle;
+
+	MyUARTSendStringZ("DATA:");
+		int i;
+
+		for (i = 0; i < 8; i++) {
+			sep();
+			MyUARTPrintDecimal(array[i]);
+		}
+		crlf();
+
+	//print_record(array,8);
 }
 
 /**
@@ -446,9 +454,12 @@ int32_t readTemperature () {
 
 void heatingElementOn() {
 	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 1);
+	heaterStatus |= (1<<0);
 }
 void heatingElementOff() {
 	GPIOSetBitValue(HEATING_ELEMENT_PORT,HEATING_ELEMENT_PIN, 0);
+	//heaterStatus &= ~(1<<0);
+	heaterStatus = 0; // This cancels any oneshot in progress also.
 }
 
 void printDS18B20Address () {
@@ -459,33 +470,55 @@ void printDS18B20Address () {
 }
 
 void experimentalWarmUp (uint32_t setPointTemperature) {
+	uint32_t e;
 	uint32_t t0,t1,t2,t3;
 	t0 = readTemperature();
+
+	// Burn 1 in systicks
+#define BURN1_ST 9000
 
 	debug ("T0",t0);
 
 	// Test burn
+	/*
 	setHeaterDutyCycle(1024);
 	delayMilliseconds(120000);
 	setHeaterDutyCycle(0);
+	*/
+	setOneShotHeating(BURN1_ST);
+	while ( heaterStatus&(1<<1) ) {
+		__WFI();
+		if (timeTick%1000==0) {
+			printDataRecord();
+		}
+	}
 
 	// Some settle time
-	delayMilliseconds(120000);
+	//delayMilliseconds(10000);
+
+	e = timeTick + 12000;
+	while (timeTick<e) {
+		__WFI();
+		if (timeTick%1000==0) {
+			printDataRecord();
+		}
+	}
 
 
-
+#ifdef USE_EXP_CURVEFIT
 	t1 = readTemperature();
 	debug ("T1",t1);
 
-
-	delayMilliseconds(60000);
+	delayMilliseconds(10000);
 	t2 = readTemperature();
 
 	debug ("T2",t2);
+	printDataRecord();
 
-	delayMilliseconds(60000);
+	delayMilliseconds(10000);
 	t3 = readTemperature();
 	debug ("T3",t3);
+	printDataRecord();
 
 	uint32_t expfrac = ((t3-t2)*256)/(t2-t1);
 	// TODO: expfrac must be <256
@@ -502,22 +535,41 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	} while (delta > 16);
 	//fprintf (stderr,"estimated final temp=%d j=%d delta=%d\n", t3,j,delta);
 
-
-	debug ("Te1=",t3);
+	// t3 has final settle temperature
+	debug ("Te1",t3);
+#else
+	t3 = readTemperature();
+#endif
 
 	// Second burn: how many more seconds do we need to bring to
-	// 1C of target?
-	uint32_t burn2_time = (( (setPointTemperature-1000) - t3) * 120000 ) / (t3-t0);
+	// 3C of target?
+	uint32_t burn2_time = (( (setPointTemperature-3000) - t3)
+			* (BURN1_ST*10) ) / (t3-t0);
 
 	debug ("b2_t",burn2_time);
 
-	setHeaterDutyCycle(1024);
-	delayMilliseconds(burn2_time);
-	setHeaterDutyCycle(0);
+	//setHeaterDutyCycle(1024);
+	//delayMilliseconds(burn2_time);
+	//setHeaterDutyCycle(0);
+	setOneShotHeating(burn2_time/10);
+	while (heaterStatus&(1<<1)) {
+		__WFI();
+		if (timeTick%1000==0) {
+			printDataRecord();
+		}
+	}
 
 	// Allow to settle
-	delayMilliseconds(300000);
+	//delayMilliseconds(300000);
+	e = timeTick + 6000;
+	while (timeTick<e) {
+		__WFI();
+		if (timeTick%1000==0) {
+			printDataRecord();
+		}
+	}
 
+#ifdef BURN3_EN
 	int32_t t5 = readTemperature();
 
 	// Trim burn
@@ -531,8 +583,10 @@ void experimentalWarmUp (uint32_t setPointTemperature) {
 	setHeaterDutyCycle(0);
 
 	delayMilliseconds(60000);
+#endif
 
 }
+
 /**
  * Set the heating element duty cycle. Allowed values 0 - 1023.
  */
@@ -542,6 +596,12 @@ void setHeaterDutyCycle (int dutyCycle) {
 		return;
 	}
 	heaterDutyCycle = (dutyCycle * HEATER_PWM_PERIOD) / 1024;
+}
+
+void setOneShotHeating (int time_ticks) {
+	heaterStatus |= (1<<1); // set one shot mode flag
+	oneShotEnd = timeTick + time_ticks;
+	heatingElementOn();
 }
 
 /**
@@ -564,7 +624,7 @@ void debug(char *key, int32_t value) {
 	MyUARTSendStringZ(key);
 	MyUARTSendByte('=');
 	MyUARTPrintDecimal(value);
-	crlf(); //MyUARTSendStringZ("\r\n");
+	crlf();
 }
 
 void print_record(int32_t array[], int len) {
@@ -583,13 +643,27 @@ void print_record(int32_t array[], int len) {
  **/
 void SysTick_Handler(void) {
 	timeTick++;
-	if ( (timeTick%HEATER_PWM_PERIOD) >= heaterDutyCycle) {
-		heatingElementOff();
-		heaterStatus = 0;
+
+	if (heaterStatus&(1<<1)) {
+		if (timeTick == oneShotEnd) {
+			// If one shot mode and reached end time, element off.
+			heatingElementOff();
+			//heaterStatus = 0; // clear one shot and element one flag
+		}
+
 	} else {
-		heatingElementOn();
-		heaterStatus = 1;
+
+		// Implement PWM mode
+		if ( (timeTick%HEATER_PWM_PERIOD) >= heaterDutyCycle) {
+			heatingElementOff();
+			//heaterStatus = 0;
+		} else {
+			heatingElementOn();
+			//heaterStatus = 1;
+		}
+
 	}
+
 }
 
 /**
@@ -602,8 +676,6 @@ void PININT1_IRQHandler(void) {
 		//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"^");
 		interruptFlags |= 0x01;
 		swDownTime = timeTick;
-	} else {
-		//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"x");
 	}
 
 	// Clear the interrupt
