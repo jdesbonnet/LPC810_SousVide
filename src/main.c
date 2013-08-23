@@ -246,7 +246,7 @@ int main (void)
 
 	MyUARTPrintHex((uint32_t)(rom_addr >> 32) );
 	MyUARTPrintHex((uint32_t)(rom_addr & 0x00000000ffffffff ));
-	MyUARTSendStringZ ("\r\n");
+	crlf(); //MyUARTSendStringZ ("\r\n");
 
 	debug ("T_start",readTemperature());
 	//MyUARTSendStringZ (LPC_USART0, (uint8_t*)"\r\n");
@@ -455,7 +455,7 @@ void printDS18B20Address () {
 	uint64_t rom_addr = ds18b20_rom_read();
 	MyUARTPrintHex(rom_addr >> 32 );
 	MyUARTPrintHex((uint32_t)(rom_addr & 0x00000000ffffffff ));
-	MyUARTSendStringZ ("<\r\n");
+	crlf(); //MyUARTSendStringZ ("\r\n");
 }
 
 void experimentalWarmUp (uint32_t setPointTemperature) {
@@ -564,7 +564,7 @@ void debug(char *key, int32_t value) {
 	MyUARTSendStringZ(key);
 	MyUARTSendByte('=');
 	MyUARTPrintDecimal(value);
-	MyUARTSendStringZ("\r\n");
+	crlf(); //MyUARTSendStringZ("\r\n");
 }
 
 void print_record(int32_t array[], int len) {
@@ -575,7 +575,7 @@ void print_record(int32_t array[], int len) {
 		sep();
 		MyUARTPrintDecimal(array[i]);
 	}
-	MyUARTSendStringZ("\r\n");
+	crlf();
 }
 /**
  * SysTick interrupt happens every 10 ms. Update timeTick
